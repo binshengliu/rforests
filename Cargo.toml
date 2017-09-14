@@ -1,0 +1,6 @@
+[package]
+name = "rforests"
+version = "0.1.0"
+authors = ["Binsheng Liu <lbsx@users.noreply.github.com>"]
+
+[dependencies]
