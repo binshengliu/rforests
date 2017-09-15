@@ -1,7 +1,7 @@
 use std::error;
 type Result<T> = ::std::result::Result<T, Box<error::Error>>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq)]
 struct FeaturePair {
     index: u32,
     value: f64,
@@ -99,6 +99,80 @@ impl FromStr for Line {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct FeatureStat {
+    min: f64,
+    max: f64,
+    factor: f64,
+    log: bool,
+}
+
+use std;
+use std::fs::File;
+use std::io::{self, BufReader};
+use std::io::prelude::*;
+use std::collections::HashMap;
+const MAX_FEATURE_VALUE: u32 = std::i16::MAX as u32 - 1;
+
+pub fn generate_statistics(filename: &str) -> Result<HashMap<u32, FeatureStat>> {
+    let f = File::open(filename)?;
+    let f = BufReader::new(f);
+    let mut stats: HashMap<u32, FeatureStat> = HashMap::new();
+    let mut max_feature_index = 0;
+
+    println!("Reading file {}", filename);
+    for (line_index, line) in f.lines().enumerate() {
+        let line = line?;
+        let line = Line::from_str(line.as_str())?;
+        for pair in line.pairs.iter() {
+            let mut stat = stats.entry(pair.index).or_insert(
+                FeatureStat { min: 0.0, max: 0.0, factor: 0.0, log: false },
+            );
+
+            if pair.index > max_feature_index {
+                max_feature_index = pair.index;
+            }
+
+            if pair.value > stat.max {
+                stat.max = pair.value;
+            }
+
+            if pair.value < stat.min {
+                stat.min = pair.value
+            }
+        }
+
+        if (line_index + 1) % 5000 == 0 {
+            println!("Processed {} lines", line_index + 1);
+        }
+    }
+
+    for (id, stat) in &mut stats {
+        println!("{}: {:?}", id, stat);
+        let range = stat.max - stat.min;
+        if range < MAX_FEATURE_VALUE as f64 {
+            stat.factor = MAX_FEATURE_VALUE as f64 / range;
+        } else {
+            stat.factor = MAX_FEATURE_VALUE as f64 / (range + 1.0).ln();
+            stat.log = true;
+        }
+    }
+
+    let mut sorted: Vec<(u32, FeatureStat)> = stats.iter().map(|(index, stat)| (*index, *stat)).collect();
+    sorted.sort_by_key(|&(index, _)| index);
+
+    println!("{:?}", sorted);
+
+    let mut f = File::create("data/stats.txt")?;
+    f.write_all("FeatureIndex\tName\tMin\tMax\n".as_bytes())?;
+    for (index, stat) in sorted {
+        let s = format!("{}\t{}\t{}\t{}\n", index, "null", stat.min, stat.max);
+        f.write_all(s.as_bytes())?;
+    }
+
+    Ok(stats)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,4 +223,15 @@ mod tests {
         let p = Line::from_str(s);
         assert!(p.is_err());
     }
+
+    #[test]
+    fn test_generate_statistics() {
+        let result = generate_statistics("data/train.txt").unwrap();
+        println!("{:?}", result);
+        // assert!(false);
+    }
 }
+
+// @Feature index:2 name:abc
+// Record min and max value for each feature.
+// Max feature Id.
