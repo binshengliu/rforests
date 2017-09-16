@@ -1,3 +1,5 @@
+#![feature(ord_max_min)]
+
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -8,9 +10,9 @@ extern crate docopt;
 extern crate rforests;
 
 use std::env;
-use std::path::{Path, PathBuf};
+// use std::path::{Path, PathBuf};
 
-use docopt::Docopt;
+// use docopt::Docopt;
 
 use rforests::util::Result;
 
