@@ -1,0 +1,75 @@
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::error::Error;
+use rforests::util::{Result};
+
+#[derive(Debug, Deserialize)]
+pub struct Args {
+    arg_file: Vec<String>,
+    flag_ranking: bool,
+
+    flag_help: bool,
+}
+
+pub const USAGE: &'static str = "
+Generate binary files
+
+Usage:
+    rforests genbin [--ranking] <file>...
+    rforests genbin (-h | --help)
+
+Options:
+    -r, --ranking               Support ranking
+    -h, --help                  Display this message
+";
+
+pub fn execute(args: Args) -> Result<()> {
+    debug!("rforests genbin args: {:?}", args);
+    Ok(())
+}
+
+// pub fn run<'de, Flags: Deserialize<'de>>(
+//             exec: fn(Flags, &Config) -> Result<()>,
+//             config: &Config,
+//             usage: &str,
+//             args: &[String],
+//             options_first: bool) -> Result<()> {
+//     let docopt = Docopt::new(usage).unwrap()
+//         .options_first(options_first)
+//         .argv(args.iter().map(|s| &s[..]))
+//         .help(true);
+
+//     let flags = docopt.deserialize().map_err(|e| {
+//         let code = if e.fatal() {1} else {0};
+//         CliError::new(e.to_string().into(), code)
+//     })?;
+
+//     exec(flags, config);
+
+//     // let mut f = File::open(config.filename)?;
+
+//     // let mut contents = String::new();
+//     // f.read_to_string(&mut contents)?;
+
+//     // println!("With text:\n{}", contents);
+
+//     // let mut results: Vec<String> = Vec::new();
+
+//     // for line in contents.lines() {}
+
+//     unimplemented!()
+// }
+
+pub fn generate_statistics(filename: &str) -> Result<()> {
+    let f = File::open(filename)?;
+    let f = BufReader::new(f);
+
+    println!("Reading file");
+    for line in f.lines().take(3) {
+        println!("{}", line.unwrap());
+        println!("");
+    }
+
+    Ok(())
+}

@@ -120,7 +120,7 @@ pub fn generate_statistics(filename: &str) -> Result<HashMap<u32, FeatureStat>> 
     let mut stats: HashMap<u32, FeatureStat> = HashMap::new();
     let mut max_feature_index = 0;
 
-    println!("Reading file {}", filename);
+    println!("Processing file {}", filename);
     for (line_index, line) in f.lines().enumerate() {
         let line = line?;
         let line = Line::from_str(line.as_str())?;
@@ -142,6 +142,7 @@ pub fn generate_statistics(filename: &str) -> Result<HashMap<u32, FeatureStat>> 
             }
         }
 
+        // Notify the user every 5000 lines.
         if (line_index + 1) % 5000 == 0 {
             println!("Processed {} lines", line_index + 1);
         }

@@ -1,53 +1,31 @@
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::{self, BufReader};
-use std::error::Error;
-// use std::io::Result;
+use std::process;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::fs;
 
-mod parse;
+extern crate serde;
+extern crate docopt;
 
-pub struct Config {
-    pub query: String,
-    pub filename: String,
-}
+use docopt::Docopt;
 
-impl Config {
-    pub fn new(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 3 {
-            return Err("not enough arguments");
-        }
+use util::{Result};
+pub mod util;
 
-        let query = args[1].clone();
-        let filename = args[2].clone();
+use serde::Deserialize;
+pub fn call_entry_with_args<'de, Args: Deserialize<'de>>(
+    exec: fn(Args) -> Result<()>,
+    usage: &str,
+    argv: &[String],
+    options_first: bool,
+) -> Result<()> {
+    let docopt = Docopt::new(usage)
+        .unwrap()
+        .options_first(options_first)
+        .argv(argv.iter().map(|s| &s[..]))
+        .help(true)
+        .version(Some(String::from("0.1.0")));
 
-        Ok(Config { query, filename })
-    }
-}
+    let args = docopt.deserialize().unwrap_or_else(|e| e.exit());
 
-pub fn run(config: Config) -> std::io::Result<()> {
-    let mut f = File::open(config.filename)?;
-
-    let mut contents = String::new();
-    f.read_to_string(&mut contents)?;
-
-    println!("With text:\n{}", contents);
-
-    let mut results: Vec<String> = Vec::new();
-
-    for line in contents.lines() {}
-
-    Ok(())
-}
-
-pub fn generate_statistics(filename: &str) -> std::io::Result<()> {
-    let f = File::open(filename)?;
-    let f = BufReader::new(f);
-
-    println!("Reading file");
-    for line in f.lines().take(3) {
-        println!("{}", line.unwrap());
-        println!("");
-    }
-
-    Ok(())
+    exec(args)
 }

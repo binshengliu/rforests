@@ -4,3 +4,8 @@ version = "0.1.0"
 authors = ["Binsheng Liu <lbsx@users.noreply.github.com>"]
 
 [dependencies]
+env_logger = "0.4.3"
+log = "0.3.8"
+docopt = "0.8.1"
+serde_derive = "1.0.14"
+serde = "1.0.14"
