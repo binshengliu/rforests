@@ -29,10 +29,26 @@ Options:
     -h, --help                  Display this message
 ";
 
-const MAX_FEATURE_VALUE: u32 = ::std::i16::MAX as u32 - 1;
+pub struct FeatureScale {
+    logarithm: bool,
+    scale: f64,
+}
+
+const MAX_FEATURE_VALUE: f64 = ::std::i16::MAX as f64 - 1.0;
 pub fn execute(args: Args) -> Result<()> {
     debug!("rforests genbin args: {:?}", args);
     let mut stats = svmlight::SampleStats::parse(&args.arg_file)?;
+
+    println!("Stats: {:?}", stats);
+
+    let scales: Vec<_> = stats.feature_stats().map(|fstats| {
+        let range = fstats.max - fstats.min;
+        if range < MAX_FEATURE_VALUE {
+            FeatureScale {logarithm: false, scale: MAX_FEATURE_VALUE / range}
+        } else {
+            FeatureScale {logarithm: true, scale: MAX_FEATURE_VALUE / (range + 1.0).ln()}
+        }
+    }).collect();
 
     // stats.iter().map(|(feature_index, stat)| {
     //     0
@@ -51,10 +67,10 @@ pub fn execute(args: Args) -> Result<()> {
 }
 
 fn convert(input: &str, output: &str, stats: &svmlight::SampleStats) -> Result<()> {
-    let file = svmlight::SvmLightFile::new(input)?;
+    let file = svmlight::SvmLightFile::open(input)?;
 
     // 1. Scale the values according to svmlight
-    for line in file.lines() {
+    for line in file.instances() {
 
     }
 

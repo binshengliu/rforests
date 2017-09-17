@@ -2,7 +2,6 @@ use std;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
-use std::collections::HashMap;
 use std::str::FromStr;
 use util::Result;
 
@@ -14,13 +13,13 @@ use util::Result;
 // <info> .=. <string>
 
 #[derive(Default, Debug, PartialEq)]
-struct Feature {
-    id: u32,
+pub struct Feature {
+    id: usize,
     feature_value: f64,
 }
 
 impl Feature {
-    fn new(id: u32, feature_value: f64) -> Feature {
+    pub fn new(id: usize, feature_value: f64) -> Feature {
         Feature {
             id: id,
             feature_value: feature_value,
@@ -37,7 +36,7 @@ impl FromStr for Feature {
             Err(format!("Invalid string: {}", s))?;
         }
 
-        let id = v[0].parse::<u32>()?;
+        let id = v[0].parse::<usize>()?;
         let feature_value = v[1].parse::<f64>()?;
 
         Ok(Feature {
@@ -48,18 +47,18 @@ impl FromStr for Feature {
 }
 
 #[derive(Debug, PartialEq)]
-struct Instance {
+pub struct Instance {
     target: u32,
     qid: u64,
     features: Vec<Feature>,
 }
 
 impl Instance {
-    fn features(&self) -> std::slice::Iter<Feature> {
+    pub fn features(&self) -> std::slice::Iter<Feature> {
         self.features.iter()
     }
 
-    fn features_mut(&mut self) -> std::slice::IterMut<Feature> {
+    pub fn features_mut(&mut self) -> std::slice::IterMut<Feature> {
         self.features.iter_mut()
     }
 
@@ -107,7 +106,8 @@ impl FromStr for Instance {
 
             let target = Instance::parse_target(fields[0])?;
             let qid = Instance::parse_qid(fields[1])?;
-            let features: Vec<Feature> = Instance::parse_features(&fields[2..])?;
+            let features: Vec<Feature> =
+                Instance::parse_features(&fields[2..])?;
 
             Ok(Instance {
                 target: target,
@@ -118,66 +118,60 @@ impl FromStr for Instance {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct FeatureStat {
-    id: u32,
-    min: f64,
-    max: f64,
-    factor: f64,
-    log: bool,
+#[derive(Default, Debug, Clone, Copy)]
+pub struct FeatureStat {
+    pub id: usize,
+    pub min: f64,
+    pub max: f64,
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct SampleStats {
-    min_feature_id: u32,
-    max_feature_id: u32,
-    feature_stats: HashMap<u32, FeatureStat>,
+    max_feature_id: usize,
+    feature_stats: Vec<FeatureStat>,
 }
 
 impl SampleStats {
     pub fn parse(files: &[String]) -> Result<SampleStats> {
-        let mut stats = SampleStats {
-            min_feature_id: std::u32::MAX,
-            max_feature_id: 0,
-            feature_stats: HashMap::new(),
-        };
+        let mut stats = SampleStats::default();
 
         for file in files {
+            debug!("Processing file {}", file);
             stats.update_stats_from_file(file)?;
+            debug!("Processed file {}", file);
         }
 
         Ok(stats)
     }
 
-    fn update(&mut self, feature_id: u32, feature_value: f64) {
-        let stat = self.feature_stats.entry(feature_id).or_insert(FeatureStat {
-            id: feature_id,
-            min: std::f64::MAX,
-            max: std::f64::MIN,
-            factor: 0.0,
-            log: false,
-        });
+    pub fn feature_count(&self) -> usize {
+        self.max_feature_id
+    }
 
-        self.max_feature_id = self.max_feature_id.max(feature_id);
-        self.min_feature_id = self.min_feature_id.min(feature_id);
+    pub fn feature_stats(&self) -> std::slice::Iter<FeatureStat>{
+        self.feature_stats.iter()
+    }
+
+    fn update(&mut self, feature_id: usize, feature_value: f64) {
+        // feature_id-1 is used as vec index
+        if feature_id > self.feature_stats.len() {
+            self.feature_stats.resize(feature_id, FeatureStat::default());
+        }
+
+        let stat = &mut self.feature_stats[feature_id-1];
+
+        stat.id = feature_id;
         stat.max = stat.max.max(feature_value);
         stat.min = stat.min.min(feature_value);
+
+        self.max_feature_id = self.max_feature_id.max(feature_id);
     }
 
     fn update_stats_from_file(&mut self, filename: &str) -> Result<()> {
-        let file = File::open(filename)?;
-        let reader = BufReader::new(file);
+        let file = SvmLightFile::open(filename)?;
 
-        debug!("Processing file {}", filename);
-        for (line_index, line) in reader.lines().enumerate() {
-            let line = line?;
-            let instance = match Instance::from_str(line.as_str()) {
-                Ok(instance) => instance,
-                Err(e) => {
-                    error!("Parse instance error: {}", e.description());
-                    continue;
-                }
-            };
+        for (line_index, instance) in file.instances().enumerate() {
+            let instance = instance?;
 
             for feature in instance.features() {
                 self.update(feature.id, feature.feature_value);
@@ -194,18 +188,34 @@ impl SampleStats {
 }
 
 pub struct SvmLightFile {
-    filename: String,
+    file: File,
 }
 
 impl SvmLightFile {
-    pub fn new(filename: &str) -> Result<SvmLightFile> {
-        Ok(SvmLightFile { filename: filename.to_string() })
+    pub fn open(filename: &str) -> Result<SvmLightFile> {
+        let file = File::open(filename)?;
+        Ok(SvmLightFile { file: file })
     }
 
-    pub fn lines(&self) -> Result<std::io::Lines<std::io::BufReader<File>>> {
-        let file = File::open(&self.filename)?;
-        let reader = BufReader::new(file);
-        Ok(reader.lines())
+    // I just want to return an abstract type, like returning an
+    // interface in Java. They are working on this:
+    // https://stackoverflow.com/questions/27535289/correct-way-to-return-an-iterator/27535594#27535594
+    // https://github.com/rust-lang/rfcs/blob/master/text/1522-conservative-impl-trait.md
+    pub fn instances(self) -> Box<Iterator<Item = Result<Instance>>> {
+        // Bring Error::description() into scope
+        use std::error::Error;
+
+        let buf_reader = BufReader::new(self.file);
+
+        let iter = buf_reader.lines().map(|result| {
+            result
+            // Change the error type to match the function signature
+                .map_err(|e| e.description().into())
+                .and_then(|line| {
+                    Instance::from_str(line.as_str())
+                })
+        });
+        Box::new(iter)
     }
 }
 
@@ -247,7 +257,10 @@ mod tests {
         let p = Instance::from_str(s).unwrap();
         assert_eq!(p.target, 0);
         assert_eq!(p.qid, 3864);
-        assert_eq!(p.features, vec![Feature::new(1, 3.0), Feature::new(2, 9.0)]);
+        assert_eq!(
+            p.features,
+            vec![Feature::new(1, 3.0), Feature::new(2, 9.0)]
+        );
     }
 
     #[test]
