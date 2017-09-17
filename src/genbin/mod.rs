@@ -50,6 +50,20 @@ pub fn execute(args: Args) -> Result<()> {
     Ok(())
 }
 
+fn convert(input: &str, output: &str, stats: &svmlight::SampleStats) -> Result<()> {
+    let file = svmlight::SvmLightFile::new(input)?;
+
+    // 1. Scale the values according to svmlight
+    for line in file.lines() {
+
+    }
+
+    // Load the values into a hash map
+    // Convert the hash map into a sorted vec of values
+    // Update each feature to contain index into the vec
+    Ok(())
+}
+
 // pub fn run<'de, Flags: Deserialize<'de>>(
 //             exec: fn(Flags, &Config) -> Result<()>,
 //             config: &Config,

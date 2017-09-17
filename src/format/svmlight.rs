@@ -131,7 +131,7 @@ struct FeatureStat {
 pub struct SampleStats {
     min_feature_id: u32,
     max_feature_id: u32,
-    feature_stat: HashMap<u32, FeatureStat>,
+    feature_stats: HashMap<u32, FeatureStat>,
 }
 
 impl SampleStats {
@@ -139,7 +139,7 @@ impl SampleStats {
         let mut stats = SampleStats {
             min_feature_id: std::u32::MAX,
             max_feature_id: 0,
-            feature_stat: HashMap::new(),
+            feature_stats: HashMap::new(),
         };
 
         for file in files {
@@ -150,10 +150,10 @@ impl SampleStats {
     }
 
     fn update(&mut self, feature_id: u32, feature_value: f64) {
-        let stat = self.feature_stat.entry(feature_id).or_insert(FeatureStat {
+        let stat = self.feature_stats.entry(feature_id).or_insert(FeatureStat {
             id: feature_id,
-            min: 0.0,
-            max: 0.0,
+            min: std::f64::MAX,
+            max: std::f64::MIN,
             factor: 0.0,
             log: false,
         });
@@ -167,7 +167,6 @@ impl SampleStats {
     fn update_stats_from_file(&mut self, filename: &str) -> Result<()> {
         let file = File::open(filename)?;
         let reader = BufReader::new(file);
-        let mut max_feature_id = 0;
 
         debug!("Processing file {}", filename);
         for (line_index, line) in reader.lines().enumerate() {
@@ -191,6 +190,22 @@ impl SampleStats {
         }
 
         Ok(())
+    }
+}
+
+pub struct SvmLightFile {
+    filename: String,
+}
+
+impl SvmLightFile {
+    pub fn new(filename: &str) -> Result<SvmLightFile> {
+        Ok(SvmLightFile { filename: filename.to_string() })
+    }
+
+    pub fn lines(&self) -> Result<std::io::Lines<std::io::BufReader<File>>> {
+        let file = File::open(&self.filename)?;
+        let reader = BufReader::new(file);
+        Ok(reader.lines())
     }
 }
 
