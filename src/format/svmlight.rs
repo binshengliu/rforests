@@ -1,5 +1,17 @@
-use std::error;
-type Result<T> = ::std::result::Result<T, Box<error::Error>>;
+use std;
+use std::fs::File;
+use std::io::BufReader;
+use std::io::prelude::*;
+use std::collections::HashMap;
+use std::str::FromStr;
+use util::Result;
+
+// Format of the example file. http://svmlight.joachims.org/
+// <line> .=. <target> <feature>:<value> <feature>:<value> ... <feature>:<value> # <info>
+// <target> .=. +1 | -1 | 0 | <float>
+// <feature> .=. <integer> | "qid"
+// <value> .=. <float>
+// <info> .=. <string>
 
 #[derive(Default, Debug, PartialEq)]
 struct Feature {
@@ -8,7 +20,7 @@ struct Feature {
 }
 
 impl Feature {
-    pub fn new(id: u32, feature_value: f64) -> Feature {
+    fn new(id: u32, feature_value: f64) -> Feature {
         Feature {
             id: id,
             feature_value: feature_value,
@@ -16,9 +28,8 @@ impl Feature {
     }
 }
 
-use std::str::FromStr;
 impl FromStr for Feature {
-    type Err = Box<error::Error>;
+    type Err = Box<std::error::Error>;
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         let v: Vec<&str> = s.split(':').collect();
@@ -37,7 +48,7 @@ impl FromStr for Feature {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Instance {
+struct Instance {
     target: u32,
     qid: u64,
     features: Vec<Feature>,
@@ -81,7 +92,7 @@ impl Instance {
 }
 
 impl FromStr for Instance {
-    type Err = Box<error::Error>;
+    type Err = Box<std::error::Error>;
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         let instance = s.trim();
@@ -108,19 +119,13 @@ impl FromStr for Instance {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FeatureStat {
-    pub id: u32,
-    pub min: f64,
-    pub max: f64,
-    pub factor: f64,
-    pub log: bool,
+struct FeatureStat {
+    id: u32,
+    min: f64,
+    max: f64,
+    factor: f64,
+    log: bool,
 }
-
-use std;
-use std::fs::File;
-use std::io::{self, BufReader};
-use std::io::prelude::*;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct SampleStats {
@@ -145,7 +150,7 @@ impl SampleStats {
     }
 
     fn update(&mut self, feature_id: u32, feature_value: f64) {
-        let mut stat = self.feature_stat.entry(feature_id).or_insert(FeatureStat {
+        let stat = self.feature_stat.entry(feature_id).or_insert(FeatureStat {
             id: feature_id,
             min: 0.0,
             max: 0.0,
@@ -153,10 +158,10 @@ impl SampleStats {
             log: false,
         });
 
-        self.max_feature_id = u32::max(self.max_feature_id, feature_id);
-        self.min_feature_id = u32::min(self.min_feature_id, feature_id);
-        stat.max = f64::max(stat.max, feature_value);
-        stat.min = f64::min(stat.min, feature_value);
+        self.max_feature_id = self.max_feature_id.max(feature_id);
+        self.min_feature_id = self.min_feature_id.min(feature_id);
+        stat.max = stat.max.max(feature_value);
+        stat.min = stat.min.min(feature_value);
     }
 
     fn update_stats_from_file(&mut self, filename: &str) -> Result<()> {
@@ -236,14 +241,22 @@ mod tests {
         let p = Instance::from_str(s);
         assert!(p.is_err());
     }
-
-    #[test]
-    fn test_generate_statistics() {
-        let result = gen_stats("data/train.txt").unwrap();
-        println!("{:?}", result);
-        // assert!(false);
-    }
 }
+
+// fn write_stats(stats: HashMap<u32, FeatureStat>) -> Result<()> {
+//     let mut sorted: Vec<(u32, FeatureStat)> = stats.iter().map(|(index, stat)| (*index, *stat)).collect();
+//     sorted.sort_by_key(|&(index, _)| index);
+
+//     println!("{:?}", sorted);
+
+//     let mut f = File::create("data/stats.txt")?;
+//     f.write_all("FeatureIndex\tName\tMin\tMax\n".as_bytes())?;
+//     for (index, stat) in sorted {
+//         // let s = format!("{}\t{}\t{}\t{}\n", index, "null", stat.min, stat.max);
+//         // f.write_all(s.as_bytes())?;
+//     }
+//     Ok(())
+// }
 
 // @Feature id:2 name:abc
 // Record min and max feature_value for each feature.

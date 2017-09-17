@@ -1,4 +1,4 @@
-use rforests::util::{Result};
+use util::{Result};
 
 #[derive(Debug, Deserialize)]
 pub struct Args {
