@@ -12,7 +12,7 @@ use util::Result;
 // <value> .=. <float>
 // <info> .=. <string>
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Copy, Clone, Default, Debug, PartialEq)]
 pub struct Feature {
     id: usize,
     feature_value: f64,
@@ -46,6 +46,12 @@ impl FromStr for Feature {
     }
 }
 
+impl ToString for Feature {
+    fn to_string(&self) -> String {
+        format!("{}:{}", self.id, self.feature_value)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Instance {
     target: u32,
@@ -60,6 +66,14 @@ impl Instance {
 
     pub fn features_mut(&mut self) -> std::slice::IterMut<Feature> {
         self.features.iter_mut()
+    }
+
+    pub fn trim_zeros(&mut self) {
+        self.features = self.features
+            .iter()
+            .cloned()
+            .filter(|f| f.feature_value != 0.0)
+            .collect();
     }
 
     fn parse_target(target: &str) -> Result<u32> {
@@ -118,6 +132,17 @@ impl FromStr for Instance {
     }
 }
 
+impl ToString for Instance {
+    fn to_string(&self) -> String {
+        let features = self.features
+            .iter()
+            .map(|f| f.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!("{} qid:{} {}", self.target, self.qid, features)
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy)]
 pub struct FeatureStat {
     pub id: usize,
@@ -148,17 +173,20 @@ impl SampleStats {
         self.max_feature_id
     }
 
-    pub fn feature_stats(&self) -> std::slice::Iter<FeatureStat>{
+    pub fn feature_stats(&self) -> std::slice::Iter<FeatureStat> {
         self.feature_stats.iter()
     }
 
     fn update(&mut self, feature_id: usize, feature_value: f64) {
         // feature_id-1 is used as vec index
         if feature_id > self.feature_stats.len() {
-            self.feature_stats.resize(feature_id, FeatureStat::default());
+            self.feature_stats.resize(
+                feature_id,
+                FeatureStat::default(),
+            );
         }
 
-        let stat = &mut self.feature_stats[feature_id-1];
+        let stat = &mut self.feature_stats[feature_id - 1];
 
         stat.id = feature_id;
         stat.max = stat.max.max(feature_value);
