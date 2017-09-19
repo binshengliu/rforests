@@ -1,4 +1,4 @@
-// use std::fs::File;
+use std::fs::File;
 // use std::io::prelude::*;
 // use std::io::BufReader;
 // use std::error::Error;
@@ -6,6 +6,7 @@
 
 use util::Result;
 use format::svmlight;
+use format::svmlight::SvmLightFile;
 
 pub mod feature;
 
@@ -29,26 +30,21 @@ Options:
     -h, --help                  Display this message
 ";
 
-pub struct FeatureScale {
-    logarithm: bool,
-    scale: f64,
-}
-
-const MAX_FEATURE_VALUE: f64 = ::std::i16::MAX as f64 - 1.0;
 pub fn execute(args: Args) -> Result<()> {
     debug!("rforests genbin args: {:?}", args);
-    let mut stats = svmlight::SampleStats::parse(&args.arg_file)?;
+    let filenames = args.arg_file.clone();
+    let stats = svmlight::SampleStats::parse(&filenames)?;
 
-    println!("Stats: {:?}", stats);
+    debug!("Write compact file");
+    let feature_scales = stats.feature_scales();
+    for input_name in &filenames {
+        let output_name = SvmLightFile::compact_file_name(input_name);
+        debug!("Converting {} to {}", input_name, output_name);
 
-    let scales: Vec<_> = stats.feature_stats().map(|fstats| {
-        let range = fstats.max - fstats.min;
-        if range < MAX_FEATURE_VALUE {
-            FeatureScale {logarithm: false, scale: MAX_FEATURE_VALUE / range}
-        } else {
-            FeatureScale {logarithm: true, scale: MAX_FEATURE_VALUE / (range + 1.0).ln()}
-        }
-    }).collect();
+        let input = File::open(input_name.as_str())?;
+        let mut output = File::create(output_name)?;
+        SvmLightFile::write_compact_format(input, output, &feature_scales)?;
+    }
 
     // stats.iter().map(|(feature_index, stat)| {
     //     0
@@ -66,13 +62,15 @@ pub fn execute(args: Args) -> Result<()> {
     Ok(())
 }
 
-fn convert(input: &str, output: &str, stats: &svmlight::SampleStats) -> Result<()> {
-    let file = svmlight::SvmLightFile::open(input)?;
+fn convert(
+    input: &str,
+    output: &str,
+    stats: &svmlight::SampleStats,
+) -> Result<()> {
+    // let file = svmlight::SvmLightFile::open(input)?;
 
     // 1. Scale the values according to svmlight
-    for line in file.instances() {
-
-    }
+    // for line in file.instances() {}
 
     // Load the values into a hash map
     // Convert the hash map into a sorted vec of values
@@ -111,4 +109,3 @@ fn convert(input: &str, output: &str, stats: &svmlight::SampleStats) -> Result<(
 
 //     unimplemented!()
 // }
-
