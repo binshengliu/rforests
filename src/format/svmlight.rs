@@ -217,9 +217,9 @@ impl SampleStats {
         let mut stats = SampleStats::default();
 
         for file in files {
-            debug!("Processing file {}", file);
+            debug!("Performing statistics analysis of {}", file);
             stats.update_stats_from_file(file)?;
-            debug!("Processed file {}", file);
+            debug!("Completed perform statistical analysis of {}", file);
         }
 
         Ok(stats)

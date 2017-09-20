@@ -35,14 +35,13 @@ pub fn execute(args: Args) -> Result<()> {
     let filenames = args.arg_file.clone();
     let stats = svmlight::SampleStats::parse(&filenames)?;
 
-    debug!("Write compact file");
     let feature_scales = stats.feature_scales();
     for input_name in &filenames {
         let output_name = SvmLightFile::compact_file_name(input_name);
-        debug!("Converting {} to {}", input_name, output_name);
+        info!("Converting {} to {}", input_name, output_name);
 
         let input = File::open(input_name.as_str())?;
-        let mut output = File::create(output_name)?;
+        let output = File::create(output_name)?;
         SvmLightFile::write_compact_format(input, output, &feature_scales)?;
     }
 
