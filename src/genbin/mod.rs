@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 // use std::io::prelude::*;
 // use std::io::BufReader;
 // use std::error::Error;
@@ -33,14 +33,14 @@ Options:
 
 pub fn append_to_file_name(origin: &str, s: &str) -> String {
     let path = Path::new(origin);
-    let stem = path.file_stem().unwrap().to_str().unwrap().to_string();
-    let mut new_name = stem + s;
-
+    let mut new_name = path.file_stem().unwrap().to_os_string();
+    new_name.push(s);
+    let mut file_name = PathBuf::from(new_name);
     if let Some(ext) = path.extension() {
-        new_name += ext.to_str().unwrap();
-    }
+        file_name.set_extension(ext);
+    };
 
-    path.with_file_name(new_name).to_str().unwrap().to_string()
+    path.with_file_name(file_name).to_str().unwrap().to_string()
 }
 
 pub fn change_extension(origin: &str, new_ext: &str) -> String {
@@ -74,11 +74,11 @@ pub fn execute(args: Args) -> Result<()> {
         SvmLightFile::write_compact_format(input, output, &feature_scales)?;
     }
 
+    // Load value maps from output files
     let mut feature_value_hash: Vec<HashMap<u32, u32>> = Vec::new();
     feature_value_hash.resize(stats.max_feature_id, HashMap::default());
-    // Load value maps from output files
-    for output_name in output_files {
-        let output = File::open(output_name.as_str())?;
+    for output_name in &output_files {
+        let output = File::open(&output_name)?;
         for instance in SvmLightFile::instances(output) {
             let instance = instance?;
 
@@ -89,6 +89,55 @@ pub fn execute(args: Args) -> Result<()> {
         }
     }
 
+    // Turn hash table into vector
+    let value_table: Vec<_> = feature_value_hash
+        .into_iter()
+        .map(|hash| {
+            // The hash does not contains 0 as its key. Add it.
+            let mut values =
+                (0..1).chain(hash.keys().cloned()).collect::<Vec<_>>();
+            values.sort();
+            // println!("Sorted values: {:?}", values);
+            values
+        })
+        .collect();
+
+    // Find indices for each value
+    let mut feature_indices: Vec<Vec<u32>> = Vec::new();
+    feature_indices.resize(stats.max_feature_id, Vec::new());
+    for output_name in output_files {
+        let output = File::open(&output_name)?;
+        for (instance_index, instance) in
+            SvmLightFile::instances(output).enumerate()
+        {
+            let instance = instance?;
+
+            for feature in instance.features() {
+                let values = &value_table[feature.id - 1];
+                let index = values.binary_search(&&(feature.value as u32));
+                feature_indices[feature.id - 1].push(index.unwrap() as u32);
+                // assert_eq!(
+                //     feature_indices[feature.id - 1].len(),
+                //     instance_index
+                // );
+            }
+        }
+    }
+
+    println!("Value table 0: {:?}", value_table[0]);
+    println!("Index table 0: {:?}", feature_indices[0]);
+
+    for dist in &value_table {
+        let len = dist.len();
+        if len <= 2 {
+            // std::collections::BitVec;
+        } else if len <= ::std::u8::MAX as usize {
+        } else if len <= ::std::u16::MAX as usize {
+        } else if len <= ::std::u32::MAX as usize {
+        }
+
+        println!("len {}", len);
+    }
     // Generate bin names
     let bin_files: Vec<_> = input_files
         .iter()
