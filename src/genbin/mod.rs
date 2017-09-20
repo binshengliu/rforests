@@ -3,7 +3,7 @@ use std::path::Path;
 // use std::io::prelude::*;
 // use std::io::BufReader;
 // use std::error::Error;
-// use std::collections::HashMap;
+use std::collections::HashMap;
 
 use util::Result;
 use format::svmlight;
@@ -43,6 +43,14 @@ pub fn append_to_file_name(origin: &str, s: &str) -> String {
     path.with_file_name(new_name).to_str().unwrap().to_string()
 }
 
+pub fn change_extension(origin: &str, new_ext: &str) -> String {
+    Path::new(origin)
+        .with_extension(new_ext)
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
 pub fn execute(args: Args) -> Result<()> {
     debug!("rforests genbin args: {:?}", args);
     let input_files = args.arg_file.clone();
@@ -65,6 +73,28 @@ pub fn execute(args: Args) -> Result<()> {
         let output = File::create(output_name)?;
         SvmLightFile::write_compact_format(input, output, &feature_scales)?;
     }
+
+    let mut feature_value_hash: Vec<HashMap<u32, u32>> = Vec::new();
+    feature_value_hash.resize(stats.max_feature_id, HashMap::default());
+    // Load value maps from output files
+    for output_name in output_files {
+        let output = File::open(output_name.as_str())?;
+        for instance in SvmLightFile::instances(output) {
+            let instance = instance?;
+
+            for feature in instance.features() {
+                let hash = &mut feature_value_hash[feature.id - 1];
+                *hash.entry(feature.value.round() as u32).or_insert(0) += 1;
+            }
+        }
+    }
+
+    // Generate bin names
+    let bin_files: Vec<_> = input_files
+        .iter()
+        .map(|input| change_extension(input, "bin"))
+        .collect();
+    for bin_name in bin_files {}
 
     // stats.iter().map(|(feature_index, stat)| {
     //     0

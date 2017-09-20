@@ -14,8 +14,8 @@ use util::Result;
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
 pub struct Feature {
-    id: usize,
-    value: f64,
+    pub id: usize,
+    pub value: f64,
 }
 
 impl Feature {
@@ -207,7 +207,7 @@ pub struct FeatureStat {
 
 #[derive(Default, Debug)]
 pub struct SampleStats {
-    max_feature_id: usize,
+    pub max_feature_id: usize,
     feature_stats: Vec<FeatureStat>,
 }
 
