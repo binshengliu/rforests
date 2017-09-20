@@ -13,8 +13,6 @@ use util::Result;
 // <value> .=. <float>
 // <info> .=. <string>
 
-const MAX_FEATURE_VALUE: f64 = ::std::i16::MAX as f64 - 1.0;
-
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
 pub struct Feature {
     id: usize,
@@ -55,10 +53,42 @@ impl ToString for Feature {
     }
 }
 
+const MAX_SCALE_VALUE: f64 = ::std::i16::MAX as f64 - 1.0;
+
 pub struct FeatureScale {
     logarithm: bool,
     scale: f64,
     min: f64,
+}
+
+impl FeatureScale {
+    pub fn scale(&self, value: f64) -> f64 {
+        let output = if self.logarithm {
+            (value - self.min + 1.0).ln() * self.scale
+        } else {
+            (value - self.min) * self.scale
+        };
+        output.round()
+    }
+}
+
+impl<'a> From<&'a FeatureStat> for FeatureScale {
+    fn from(fstat: &'a FeatureStat) -> Self {
+        let range = fstat.max - fstat.min;
+        if range < MAX_SCALE_VALUE {
+            FeatureScale {
+                logarithm: false,
+                scale: MAX_SCALE_VALUE / range,
+                min: fstat.min,
+            }
+        } else {
+            FeatureScale {
+                logarithm: true,
+                scale: MAX_SCALE_VALUE / (range + 1.0).ln(),
+                min: fstat.min,
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -77,31 +107,19 @@ impl Instance {
         self.features.iter_mut()
     }
 
-    pub fn trim_zeros(&mut self) {
-        self.features = self.features
-            .iter()
-            .cloned()
-            .filter(|f| f.value.round() as u32 != 0)
-            .collect();
-    }
-
-    pub fn scale(&mut self, scaling: &Vec<FeatureScale>) {
+    pub fn scale_and_trim_zeros(&mut self, scaling: &Vec<FeatureScale>) {
         let scale_f = |f: &Feature| {
-            let log = scaling[f.id - 1].logarithm;
-            let value = if log {
-                (f.value - scaling[f.id - 1].min + 1.0).ln() *
-                    scaling[f.id - 1].scale
-            } else {
-                (f.value - scaling[f.id - 1].min) * scaling[f.id - 1].scale
-            };
-            let value = value.round();
             Feature {
                 id: f.id,
-                value: value,
+                value: scaling[f.id-1].scale(f.value),
             }
         };
 
-        self.features = self.features.iter().map(scale_f).collect();
+        self.features = self.features
+            .iter()
+            .map(scale_f)
+            .filter(|f| f.value.round() as u32 != 0)
+            .collect();
     }
 
     fn parse_target(target: &str) -> Result<u32> {
@@ -217,22 +235,7 @@ impl SampleStats {
 
     pub fn feature_scales(&self) -> Vec<FeatureScale> {
         self.feature_stats()
-            .map(|fstats| {
-                let range = fstats.max - fstats.min;
-                if range < MAX_FEATURE_VALUE {
-                    FeatureScale {
-                        logarithm: false,
-                        scale: MAX_FEATURE_VALUE / range,
-                        min: fstats.min,
-                    }
-                } else {
-                    FeatureScale {
-                        logarithm: true,
-                        scale: MAX_FEATURE_VALUE / (range + 1.0).ln(),
-                        min: fstats.min,
-                    }
-                }
-            })
+            .map(FeatureScale::from)
             .collect()
     }
 
@@ -330,13 +333,12 @@ impl SvmLightFile {
     ) -> Result<()> {
         for (index, instance) in SvmLightFile::instances(input).enumerate() {
             let mut instance = instance?;
-            instance.scale(scales);
-            instance.trim_zeros();
+            instance.scale_and_trim_zeros(scales);
             let line = instance.to_string() + "\n";
             output.write_all(line.as_bytes())?;
 
             if (index + 1) % 5000 == 0 {
-                println!("Written {} lines", index + 1);
+                info!("Written {} lines", index + 1);
             }
         }
         Ok(())
