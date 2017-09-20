@@ -314,16 +314,15 @@ impl SvmLightFile {
     }
 
     pub fn compact_file_name(origin: &str) -> String {
-        let origin_path = Path::new(origin);
-        let stem = origin_path
+        let path = Path::new(origin);
+        let stem = path
             .file_stem()
             .unwrap()
             .to_str()
             .unwrap()
             .to_string();
         let new_name = stem + "-compact.txt";
-        origin_path.with_file_name(new_name);
-        origin_path.to_str().unwrap().to_string()
+        path.with_file_name(new_name).to_str().unwrap().to_string()
     }
 
     pub fn write_compact_format(
