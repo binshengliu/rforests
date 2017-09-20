@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::path::Path;
 // use std::io::prelude::*;
 // use std::io::BufReader;
 // use std::error::Error;
@@ -30,14 +31,34 @@ Options:
     -h, --help                  Display this message
 ";
 
+pub fn append_to_file_name(origin: &str, s: &str) -> String {
+    let path = Path::new(origin);
+    let stem = path.file_stem().unwrap().to_str().unwrap().to_string();
+    let mut new_name = stem + s;
+
+    if let Some(ext) = path.extension() {
+        new_name += ext.to_str().unwrap();
+    }
+
+    path.with_file_name(new_name).to_str().unwrap().to_string()
+}
+
 pub fn execute(args: Args) -> Result<()> {
     debug!("rforests genbin args: {:?}", args);
-    let filenames = args.arg_file.clone();
-    let stats = svmlight::SampleStats::parse(&filenames)?;
+    let input_files = args.arg_file.clone();
 
+    // Generate statistics from the files
+    let stats = svmlight::SampleStats::parse(&input_files)?;
     let feature_scales = stats.feature_scales();
-    for input_name in &filenames {
-        let output_name = SvmLightFile::compact_file_name(input_name);
+    let output_files: Vec<_> = input_files
+        .iter()
+        .map(|input| append_to_file_name(input, "-compact"))
+        .collect();
+
+    // Scale the input file and trim zeros
+    for (input_name, output_name) in
+        input_files.iter().zip(output_files.iter())
+    {
         info!("Converting {} to {}", input_name, output_name);
 
         let input = File::open(input_name.as_str())?;

@@ -1,6 +1,5 @@
 use std;
 use std::fs::File;
-use std::path::Path;
 use std::io::BufReader;
 use std::io::prelude::*;
 use std::str::FromStr;
@@ -311,18 +310,6 @@ impl SvmLightFile {
                 })
             });
         Box::new(iter)
-    }
-
-    pub fn compact_file_name(origin: &str) -> String {
-        let path = Path::new(origin);
-        let stem = path
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
-        let new_name = stem + "-compact.txt";
-        path.with_file_name(new_name).to_str().unwrap().to_string()
     }
 
     pub fn write_compact_format(
