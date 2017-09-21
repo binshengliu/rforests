@@ -110,7 +110,7 @@ impl Instance {
         let scale_f = |f: &Feature| {
             Feature {
                 id: f.id,
-                value: scaling[f.id-1].scale(f.value),
+                value: scaling[f.id - 1].scale(f.value),
             }
         };
 
@@ -206,14 +206,15 @@ pub struct FeatureStat {
 }
 
 #[derive(Default, Debug)]
-pub struct SampleStats {
+pub struct FilesStats {
     pub max_feature_id: usize,
     feature_stats: Vec<FeatureStat>,
+    instances_count: Vec<(String, usize)>,
 }
 
-impl SampleStats {
-    pub fn parse(files: &[String]) -> Result<SampleStats> {
-        let mut stats = SampleStats::default();
+impl FilesStats {
+    pub fn parse(files: &[String]) -> Result<FilesStats> {
+        let mut stats = FilesStats::default();
 
         for file in files {
             debug!("Performing statistics analysis of {}", file);
@@ -222,6 +223,16 @@ impl SampleStats {
         }
 
         Ok(stats)
+    }
+
+    pub fn instances_count(&self, file_name: &str) -> usize {
+        let result = self.instances_count.iter().find(
+            |tuple| tuple.0 == file_name,
+        );
+        match result {
+            Some(&(_, count)) => count,
+            None => 0,
+        }
     }
 
     pub fn feature_count(&self) -> usize {
@@ -233,9 +244,7 @@ impl SampleStats {
     }
 
     pub fn feature_scales(&self) -> Vec<FeatureScale> {
-        self.feature_stats()
-            .map(FeatureScale::from)
-            .collect()
+        self.feature_stats().map(FeatureScale::from).collect()
     }
 
     fn update(&mut self, feature_id: usize, value: f64) {
@@ -259,10 +268,12 @@ impl SampleStats {
     fn update_stats_from_file(&mut self, filename: &str) -> Result<()> {
         let file = File::open(filename)?;
 
+        let mut instance_count = 0;
         for (line_index, instance) in
             SvmLightFile::instances(file).enumerate()
         {
             let instance = instance?;
+            instance_count += 1;
 
             for feature in instance.features() {
                 self.update(feature.id, feature.value);
@@ -273,6 +284,8 @@ impl SampleStats {
                 info!("Processed {} lines", line_index + 1);
             }
         }
+
+        self.instances_count.push((filename.to_string(), instance_count));
 
         Ok(())
     }

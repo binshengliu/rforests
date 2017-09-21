@@ -56,7 +56,7 @@ pub fn execute(args: Args) -> Result<()> {
     let input_files = args.arg_file.clone();
 
     // Generate statistics from the files
-    let stats = svmlight::SampleStats::parse(&input_files)?;
+    let stats = svmlight::FilesStats::parse(&input_files)?;
     let feature_scales = stats.feature_scales();
     let output_files: Vec<_> = input_files
         .iter()
@@ -112,6 +112,7 @@ pub fn execute(args: Args) -> Result<()> {
         {
             let instance = instance?;
 
+            // does not comiple // TODO some features are skipped
             for feature in instance.features() {
                 let values = &value_table[feature.id - 1];
                 let index = values.binary_search(&&(feature.value as u32));
@@ -164,7 +165,7 @@ pub fn execute(args: Args) -> Result<()> {
 fn convert(
     input: &str,
     output: &str,
-    stats: &svmlight::SampleStats,
+    stats: &svmlight::FilesStats,
 ) -> Result<()> {
     // let file = svmlight::SvmLightFile::open(input)?;
 
