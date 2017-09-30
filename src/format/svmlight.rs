@@ -92,7 +92,7 @@ impl<'a> From<&'a FeatureStat> for FeatureScale {
 
 #[derive(Debug, PartialEq)]
 pub struct Instance {
-    target: u32,
+    target: f64,                // or label
     qid: u64,
     features: Vec<Feature>,
 }
@@ -104,6 +104,10 @@ impl Instance {
 
     pub fn features_mut(&mut self) -> std::slice::IterMut<Feature> {
         self.features.iter_mut()
+    }
+
+    pub fn target(&self) -> f64 {
+        self.target
     }
 
     pub fn scale_and_trim_zeros(&mut self, scaling: &Vec<FeatureScale>) {
@@ -121,8 +125,8 @@ impl Instance {
             .collect();
     }
 
-    fn parse_target(target: &str) -> Result<u32> {
-        let target = target.parse::<u32>()?;
+    fn parse_target(target: &str) -> Result<f64> {
+        let target = target.parse::<f64>()?;
         Ok(target)
     }
 
