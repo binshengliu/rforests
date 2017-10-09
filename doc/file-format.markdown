@@ -1,0 +1,30 @@
+The file format for the training data is the same as for [SVM
+Light](http://svmlight.joachims.org/) and
+[RankLib](https://sourceforge.net/p/lemur/wiki/RankLib%20File%20Format/)
+
+```
+<line> .=. <target> qid:<qid> <feature>:<value> <feature>:<value> ... <feature>:<value> # <info>
+<target> .=. <positive integer>
+<qid> .=. <positive integer>
+<feature> .=. <positive integer>
+<value> .=. <float>
+<info> .=. <string>
+```
+
+An example from [SvmRank
+website](http://www.cs.cornell.edu/people/tj/svm_light/svm_rank.html):
+
+```
+3 qid:1 1:1 2:1 3:0 4:0.2 5:0 # 1A
+2 qid:1 1:0 2:0 3:1 4:0.1 5:1 # 1B 
+1 qid:1 1:0 2:1 3:0 4:0.4 5:0 # 1C
+1 qid:1 1:0 2:0 3:1 4:0.3 5:0 # 1D
+1 qid:2 1:0 2:0 3:1 4:0.2 5:0 # 2A
+2 qid:2 1:1 2:0 3:1 4:0.4 5:0 # 2B 
+1 qid:2 1:0 2:0 3:1 4:0.1 5:0 # 2C 
+1 qid:2 1:0 2:0 3:1 4:0.2 5:0 # 2D
+2 qid:3 1:0 2:0 3:1 4:0.1 5:1 # 3A 
+3 qid:3 1:1 2:1 3:0 4:0.3 5:0 # 3B 
+4 qid:3 1:1 2:0 3:0 4:0.4 5:1 # 3C 
+1 qid:3 1:0 2:1 3:1 4:0.5 5:0 # 3D
+```
