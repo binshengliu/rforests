@@ -295,6 +295,17 @@ impl DataSet {
         })
     }
 
+    pub fn labels(&self) -> Vec<f64> {
+        self.instances
+            .iter()
+            .map(|instance| instance.label)
+            .collect()
+    }
+
+    pub fn labels_iter<'a>(&'a self) -> impl Iterator<Item = f64> + 'a {
+        self.instances.iter().map(|instance| instance.label)
+    }
+
     /// Generate a vector of Query. Each Query keeps indices into the
     /// DataSet.
     pub fn group_by_queries<'a>(&'a self) -> Vec<Query<'a>> {
