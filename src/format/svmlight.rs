@@ -371,23 +371,23 @@ impl DataSet {
             .collect()
     }
 
-    /// Create at most max_threasholds intervals, so the return value
-    /// is at most of length (max_threasholds+1).
+    /// Create at most max_threasholds_count intervals, so the return value
+    /// is at most of length (max_threasholds_count+1).
     pub fn feature_threasholds(
         &self,
         fid: u64,
-        max_threasholds: usize,
+        max_threasholds_count: usize,
     ) -> Vec<f64> {
         let mut values = self.feature_sorted_values(fid);
         values.dedup();
-        if values.len() <= max_threasholds {
+        if values.len() <= max_threasholds_count {
             values.push(std::f64::MAX);
             values
         } else {
             let max = values.last().unwrap();
             let min = values.first().unwrap();
-            let step = (max - min) / max_threasholds as f64;
-            let mut v: Vec<f64> = (0..max_threasholds)
+            let step = (max - min) / max_threasholds_count as f64;
+            let mut v: Vec<f64> = (0..max_threasholds_count)
                 .map(|n| min + n as f64 * step)
                 .collect();
             v.push(std::f64::MAX);
