@@ -71,7 +71,7 @@ pub fn execute(args: Args) -> Result<()> {
 
         let input = File::open(input_name.as_str())?;
         let output = File::create(output_name)?;
-        SvmLightFile::write_compact_format(input, output, &feature_scales)?;
+        // SvmLightFile::write_compact_format(input, output, &feature_scales)?;
     }
 
     // Load value maps from output files
@@ -82,9 +82,9 @@ pub fn execute(args: Args) -> Result<()> {
         for instance in SvmLightFile::instances(output) {
             let instance = instance?;
 
-            for feature in instance.features() {
-                let hash = &mut feature_value_hash[feature.id - 1];
-                *hash.entry(feature.value.round() as u32).or_insert(0) += 1;
+            for (id, value) in instance.iter() {
+                let hash = &mut feature_value_hash[id - 1];
+                *hash.entry(value.round() as u32).or_insert(0) += 1;
             }
         }
     }
@@ -113,10 +113,10 @@ pub fn execute(args: Args) -> Result<()> {
             let instance = instance?;
 
             // does not comiple // TODO some features are skipped
-            for feature in instance.features() {
-                let values = &value_table[feature.id - 1];
-                let index = values.binary_search(&&(feature.value as u32));
-                feature_indices[feature.id - 1].push(index.unwrap() as u32);
+            for (id, value) in instance.iter() {
+                let values = &value_table[id - 1];
+                let index = values.binary_search(&&(value as u32));
+                feature_indices[id - 1].push(index.unwrap() as u32);
                 // assert_eq!(
                 //     feature_indices[feature.id - 1].len(),
                 //     instance_index

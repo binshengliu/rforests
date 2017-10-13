@@ -2,8 +2,9 @@ use std;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
-use std::str::FromStr;
 use util::Result;
+use std::collections::HashMap;
+use num;
 
 // Format of the example file. http://svmlight.joachims.org/
 // <line> .=. <target> <feature>:<value> <feature>:<value> ... <feature>:<value> # <info>
@@ -12,45 +13,45 @@ use util::Result;
 // <value> .=. <float>
 // <info> .=. <string>
 
-#[derive(Copy, Clone, Default, Debug, PartialEq)]
-pub struct Feature {
-    pub id: usize,
-    pub value: f64,
-}
+// #[derive(Copy, Clone, Default, Debug, PartialEq)]
+// pub struct Feature {
+//     pub id: usize,
+//     pub value: f64,
+// }
 
-impl Feature {
-    pub fn new(id: usize, value: f64) -> Feature {
-        Feature {
-            id: id,
-            value: value,
-        }
-    }
-}
+// impl Feature {
+//     pub fn new(id: usize, value: f64) -> Feature {
+//         Feature {
+//             id: id,
+//             value: value,
+//         }
+//     }
+// }
 
-impl FromStr for Feature {
-    type Err = Box<std::error::Error>;
+// impl FromStr for Feature {
+//     type Err = Box<std::error::Error>;
 
-    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
-        let v: Vec<&str> = s.split(':').collect();
-        if v.len() != 2 {
-            Err(format!("Invalid string: {}", s))?;
-        }
+//     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
+//         let v: Vec<&str> = s.split(':').collect();
+//         if v.len() != 2 {
+//             Err(format!("Invalid string: {}", s))?;
+//         }
 
-        let id = v[0].parse::<usize>()?;
-        let value = v[1].parse::<f64>()?;
+//         let id = v[0].parse::<usize>()?;
+//         let value = v[1].parse::<f64>()?;
 
-        Ok(Feature {
-            id: id,
-            value: value,
-        })
-    }
-}
+//         Ok(Feature {
+//             id: id,
+//             value: value,
+//         })
+//     }
+// }
 
-impl ToString for Feature {
-    fn to_string(&self) -> String {
-        format!("{}:{}", self.id, self.value as u32)
-    }
-}
+// impl ToString for Feature {
+//     fn to_string(&self) -> String {
+//         format!("{}:{}", self.id, self.value as u32)
+//     }
+// }
 
 const MAX_SCALE_VALUE: f64 = ::std::i16::MAX as f64 - 1.0;
 
@@ -90,44 +91,48 @@ impl<'a> From<&'a FeatureStat> for FeatureScale {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct Instance {
-    target: f64,                // or label
     qid: u64,
-    features: Vec<Feature>,
+    label: f64, // or label
+    values: Vec<f64>, // index from 1
 }
 
 impl Instance {
-    pub fn features(&self) -> std::slice::Iter<Feature> {
-        self.features.iter()
+    pub fn values(&self) -> std::slice::Iter<f64> {
+        self.values.iter()
     }
 
-    pub fn features_mut(&mut self) -> std::slice::IterMut<Feature> {
-        self.features.iter_mut()
+    // See https://github.com/rust-lang/rust/issues/38615 for the
+    // reason that 'a is required.
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, f64)> + 'a {
+        self.values.iter().enumerate().skip(1).map(
+            |(index, &value)| {
+                (index, value)
+            },
+        )
     }
 
-    pub fn target(&self) -> f64 {
-        self.target
+    /// Return feature value of feature id.
+    pub fn value(&self, id: u64) -> f64 {
+        self.values.get(id as usize).map_or(0.0, |v| *v)
     }
 
-    pub fn scale_and_trim_zeros(&mut self, scaling: &Vec<FeatureScale>) {
-        let scale_f = |f: &Feature| {
-            Feature {
-                id: f.id,
-                value: scaling[f.id - 1].scale(f.value),
-            }
-        };
-
-        self.features = self.features
-            .iter()
-            .map(scale_f)
-            .filter(|f| f.value.round() as u32 != 0)
-            .collect();
+    pub fn max_feature_id(&self) -> u64 {
+        self.values.len() as u64
     }
 
-    fn parse_target(target: &str) -> Result<f64> {
-        let target = target.parse::<f64>()?;
-        Ok(target)
+    pub fn label(&self) -> f64 {
+        self.label
+    }
+
+    pub fn qid(&self) -> u64 {
+        self.qid
+    }
+
+    fn parse_label(label: &str) -> Result<f64> {
+        let label = label.parse::<f64>()?;
+        Ok(label)
     }
 
     fn parse_qid(qid: &str) -> Result<u64> {
@@ -145,60 +150,246 @@ impl Instance {
         Ok(qid)
     }
 
-    fn parse_features(fields: &[&str]) -> Result<Vec<Feature>> {
-        fields
-            .iter()
-            .map(|s| Feature::from_str(s))
-            .collect::<Result<_>>()
-    }
-}
-
-impl FromStr for Instance {
-    type Err = Box<std::error::Error>;
-
-    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
-        let instance: &str = s.trim().split('#').next().unwrap().trim();
-        if instance.starts_with('@') {
-            Err(format!("Meta instance not supported yet"))?
-        } else {
-            let fields: Vec<&str> = instance.split_whitespace().collect();
-            if fields.len() < 2 {
-                Err(format!("Invalid instance"))?;
+    /// Parse &["1:3.0" "3:4.0"] into Vec of values. Absent indices
+    /// are filled with 0.0. The example above would result vec![0.0,
+    /// 3.0, 0.0, 4.0].
+    fn parse_values(fields: &[&str]) -> Result<Vec<f64>> {
+        fn parse(s: &str) -> Result<(u64, f64)> {
+            let v: Vec<&str> = s.split(':').collect();
+            if v.len() != 2 {
+                Err(format!("Invalid string: {}", s))?;
             }
 
-            let target = Instance::parse_target(fields[0])?;
-            let qid = Instance::parse_qid(fields[1])?;
-            let features: Vec<Feature> =
-                Instance::parse_features(&fields[2..])?;
+            let id = v[0].parse::<u64>()?;
+            let value = v[1].parse::<f64>()?;
 
-            Ok(Instance {
-                target: target,
-                qid: qid,
-                features: features,
+            Ok((id, value))
+        }
+
+        // (id, value) pairs
+        let v: Vec<(u64, f64)> =
+            fields.iter().map(|&s| parse(s)).collect::<Result<_>>()?;
+        let max_id = v.iter().max_by_key(|e| e.0).unwrap().0;
+        let mut ret: Vec<f64> = Vec::with_capacity(max_id as usize + 1);
+        ret.resize(max_id as usize + 1, 0.0);
+        for &(id, value) in v.iter() {
+            ret[id as usize] = value;
+        }
+
+        Ok(ret)
+    }
+
+    pub fn from_str(s: &str) -> Result<Self> {
+        let line: &str = s.trim().split('#').next().unwrap().trim();
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if fields.len() < 2 {
+            Err(format!("Invalid line"))?;
+        }
+
+        let label = Instance::parse_label(fields[0])?;
+        let qid = Instance::parse_qid(fields[1])?;
+        let values: Vec<f64> = Instance::parse_values(&fields[2..])?;
+
+        Ok(Instance {
+            label: label,
+            qid: qid,
+            values: values,
+        })
+    }
+}
+
+impl std::fmt::Display for Instance {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut values = self.values
+            .iter()
+            .enumerate()
+        // skip index 0
+            .skip(1)
+            .map(|(index, value)| format!("{}:{}", index, value))
+            .collect::<Vec<_>>();
+
+        let mut v = vec![self.label.to_string(), format!("qid:{}", self.qid)];
+        v.append(&mut values);
+        write!(f, "{}", v.join(" "))
+    }
+}
+
+impl std::ops::Deref for Instance {
+    type Target = Vec<f64>;
+
+    fn deref(&self) -> &Vec<f64> {
+        &self.values
+    }
+}
+
+pub struct Query<'a> {
+    dataset: &'a DataSet,
+
+    // qid of this Query
+    qid: u64,
+
+    // beginning index in DataSet
+    start: usize,
+
+    // length in DataSet
+    len: usize,
+}
+
+impl<'a> Query<'a> {
+    pub fn new(
+        qid: u64,
+        dataset: &'a DataSet,
+        start: usize,
+        len: usize,
+    ) -> Query<'a> {
+        Query {
+            qid: qid,
+            dataset: dataset,
+            start: start,
+            len: len,
+        }
+    }
+
+    pub fn qid(&self) -> u64 {
+        self.qid
+    }
+
+    pub fn iter<'i>(&'i self) -> impl Iterator<Item = &Instance> + 'i {
+        self.dataset[self.start..(self.start + self.len)].iter()
+    }
+}
+
+impl<'a> std::fmt::Display for Query<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let v = self.iter()
+            .map(|inst| inst.to_string())
+            .collect::<Vec<String>>();
+
+        write!(f, "{}", v.join("\n"))
+    }
+}
+
+pub struct DataSet {
+    nfeatures: usize,
+    instances: Vec<Instance>,
+}
+
+impl DataSet {
+    pub fn load<R>(reader: R) -> Result<DataSet>
+    where
+        R: ::std::io::Read,
+    {
+        let mut nfeatures = 0;
+        let instances: Vec<Instance> = SvmLightFile::instances(reader)
+            .map(|i| if let Ok(instance) = i {
+                nfeatures = u64::max(nfeatures, instance.max_feature_id());
+                return Ok(instance);
+            } else {
+                i
             })
+            .collect::<Result<Vec<Instance>>>()?;
+
+        Ok(DataSet {
+            nfeatures: nfeatures as usize,
+            instances: instances,
+        })
+    }
+
+    /// Generate a vector of Query. Each Query keeps indices into the
+    /// DataSet.
+    pub fn group_by_queries<'a>(&'a self) -> Vec<Query<'a>> {
+        let mut queries: HashMap<u64, Query> = HashMap::new();
+
+        let mut prev_qid = None;
+        let mut start = 0;
+        let mut count = 0;
+        for (index, instance) in self.iter().enumerate() {
+            let qid = instance.qid();
+            if prev_qid == Some(qid) {
+                count += 1;
+                continue;
+            }
+
+            if count != 0 {
+                queries.entry(prev_qid.unwrap()).or_insert(Query::new(
+                    prev_qid.unwrap(),
+                    self,
+                    start,
+                    count,
+                ));
+            }
+
+            prev_qid = Some(qid);
+            start = index;
+            count = 1;
+        }
+
+        if count != 0 {
+            queries.entry(prev_qid.unwrap()).or_insert(Query::new(
+                prev_qid.unwrap(),
+                self,
+                start,
+                count,
+            ));
+        }
+
+        let queries: Vec<_> =
+            queries.into_iter().map(|(_key, value)| value).collect();
+
+        queries
+    }
+
+    pub fn feature_sorted_indices(&self, fid: u64) -> Vec<usize> {
+        use std::cmp::Ordering;
+
+        let n_instances = self.len();
+        let mut indices: Vec<usize> = (0..n_instances).collect();
+        indices.sort_by(|&index1, &index2| {
+            let value1 = self[index1].value(fid);
+            let value2 = self[index2].value(fid);
+            value1.partial_cmp(&value2).unwrap_or(Ordering::Equal)
+        });
+        indices
+    }
+
+    pub fn feature_sorted_values(&self, fid: u64) -> Vec<f64> {
+        let indices = self.feature_sorted_indices(fid);
+        indices
+            .into_iter()
+            .map(|index| self[index].value(fid))
+            .collect()
+    }
+
+    /// Create at most max_threasholds intervals, so the return value
+    /// is at most of length (max_threasholds+1).
+    pub fn feature_threasholds(
+        &self,
+        fid: u64,
+        max_threasholds: usize,
+    ) -> Vec<f64> {
+        let mut values = self.feature_sorted_values(fid);
+        values.dedup();
+        if values.len() <= max_threasholds {
+            values.push(std::f64::MAX);
+            values
+        } else {
+            let max = values.last().unwrap();
+            let min = values.first().unwrap();
+            let step = (max - min) / max_threasholds as f64;
+            let mut v: Vec<f64> = (0..max_threasholds)
+                .map(|n| min + n as f64 * step)
+                .collect();
+            v.push(std::f64::MAX);
+            v
         }
     }
 }
 
-impl ToString for Instance {
-    fn to_string(&self) -> String {
-        let features = self.features
-            .iter()
-            .map(|f| f.to_string())
-            .collect::<Vec<_>>()
-            .join(" ");
-        if features.is_empty() {
-            vec![
-                self.target.to_string(),
-                "qid:".to_string() + &self.qid.to_string(),
-            ].join(" ")
-        } else {
-            vec![
-                self.target.to_string(),
-                "qid:".to_string() + &self.qid.to_string(),
-                features,
-            ].join(" ")
-        }
+impl std::ops::Deref for DataSet {
+    type Target = Vec<Instance>;
+
+    fn deref(&self) -> &Vec<Instance> {
+        &self.instances
     }
 }
 
@@ -279,8 +470,8 @@ impl FilesStats {
             let instance = instance?;
             instance_count += 1;
 
-            for feature in instance.features() {
-                self.update(feature.id, feature.value);
+            for (id, value) in instance.iter() {
+                self.update(id, value);
             }
 
             // Notify the user every 5000 lines.
@@ -289,26 +480,31 @@ impl FilesStats {
             }
         }
 
-        self.instances_count.push((filename.to_string(), instance_count));
+        self.instances_count.push(
+            (filename.to_string(), instance_count),
+        );
 
         Ok(())
     }
 }
 
-pub struct SvmLightFile {}
+pub struct SvmLightFile;
 
 impl SvmLightFile {
     // Returning an abstract type is not well supported now. The Rust
     // team is working on it:
     // https://stackoverflow.com/questions/27535289/correct-way-to-return-an-iterator/27535594#27535594
     // https://github.com/rust-lang/rfcs/blob/master/text/1522-conservative-impl-trait.md
-    pub fn instances(file: File) -> Box<Iterator<Item = Result<Instance>>> {
+    pub fn instances<R>(reader: R) -> impl Iterator<Item = Result<Instance>>
+    where
+        R: std::io::Read,
+    {
         // Bring Error::description() into scope
         use std::error::Error;
 
-        let buf_reader = BufReader::new(file);
+        let buf_reader = BufReader::new(reader);
 
-        let iter = buf_reader
+        buf_reader
             .lines()
             // Filter empty line and comment line
             .filter(|result| match result {
@@ -325,27 +521,26 @@ impl SvmLightFile {
                 .and_then(|line| {
                     Instance::from_str(line.as_str())
                 })
-            });
-        Box::new(iter)
+            })
     }
 
-    pub fn write_compact_format(
-        input: File,
-        mut output: File,
-        scales: &Vec<FeatureScale>,
-    ) -> Result<()> {
-        for (index, instance) in SvmLightFile::instances(input).enumerate() {
-            let mut instance = instance?;
-            instance.scale_and_trim_zeros(scales);
-            let line = instance.to_string() + "\n";
-            output.write_all(line.as_bytes())?;
+    // pub fn write_compact_format(
+    //     input: File,
+    //     mut output: File,
+    //     scales: &Vec<FeatureScale>,
+    // ) -> Result<()> {
+    //     for (index, instance) in SvmLightFile::instances(input).enumerate() {
+    //         let mut instance = instance?;
+    //         instance.scale_and_trim_zeros(scales);
+    //         let line = instance.to_string() + "\n";
+    //         output.write_all(line.as_bytes())?;
 
-            if (index + 1) % 5000 == 0 {
-                info!("Written {} lines", index + 1);
-            }
-        }
-        Ok(())
-    }
+    //         if (index + 1) % 5000 == 0 {
+    //             info!("Written {} lines", index + 1);
+    //         }
+    //     }
+    //     Ok(())
+    // }
 }
 
 #[cfg(test)]
@@ -353,51 +548,50 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pair_new() {
-        let p = Feature::from_str("1:3").unwrap();
-        assert_eq!(p.id, 1);
-        assert_eq!(p.value, 3.0);
-    }
-
-    #[test]
-    fn test_pair_only_id() {
-        assert!(Feature::from_str("1:").is_err());
-    }
-
-    #[test]
-    fn test_pair_only_value() {
-        assert!(Feature::from_str(":3").is_err());
-    }
-
-    #[test]
-    fn test_pair_too_many_colons() {
-        assert!(Feature::from_str("1:2:3").is_err());
-    }
-
-    #[test]
-    fn test_pair_no_colons() {
-        let p = Feature::from_str("1");
-        assert!(p.is_err());
-    }
-
-    #[test]
     fn test_line_parse() {
-        let s = "0 qid:3864 1:3.000000 2:9.000000 # 3:10.0";
+        let s = "3.0 qid:3864 1:3.000000 2:9.000000 4:3.0 # 3:10.0";
         let p = Instance::from_str(s).unwrap();
-        assert_eq!(p.target, 0);
+        assert_eq!(p.label, 3.0);
         assert_eq!(p.qid, 3864);
-        assert_eq!(
-            p.features,
-            vec![Feature::new(1, 3.0), Feature::new(2, 9.0)]
-        );
+        assert_eq!(p.values, vec![0.0, 3.0, 9.0, 0.0, 3.0]);
     }
 
     #[test]
-    fn test_line_meta() {
-        let s = "@feature";
-        let p = Instance::from_str(s);
-        assert!(p.is_err());
+    fn test_sorted_feature() {
+        let s = "0 qid:1 1:3.0 2:0.0 3:1.0\n2 qid:2 1:1.0 2:1.0 3:3.0\n0 qid:3 1:0.0 2:2.0 3:2.0";
+        let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
+
+        let sorted_indices = dataset.feature_sorted_indices(1);
+        assert_eq!(sorted_indices, vec![2, 1, 0]);
+
+        let sorted_indices = dataset.feature_sorted_indices(2);
+        assert_eq!(sorted_indices, vec![0, 1, 2]);
+
+        let sorted_indices = dataset.feature_sorted_indices(3);
+        assert_eq!(sorted_indices, vec![0, 2, 1]);
     }
+
+    #[test]
+    fn test_feature_sorted_values() {
+        let s = "0 qid:1 1:3.0 2:0.0 3:1.0\n2 qid:2 1:1.0 2:1.0 3:3.0\n0 qid:3 1:0.0 2:2.0 3:2.0";
+        let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
+
+        let sorted_indices = dataset.feature_sorted_values(1);
+        assert_eq!(sorted_indices, vec![0.0, 1.0, 3.0]);
+    }
+
+    #[test]
+    fn test_feature_threasholds() {
+        let s = "0 qid:1 1:3.0 2:0.0 3:1.0\n2 qid:2 1:1.0 2:1.0 3:3.0\n0 qid:3 1:0.0 2:2.0 3:2.0";
+        let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
+
+        let threasholds = dataset.feature_threasholds(1, 10);
+        assert_eq!(threasholds, vec![0.0, 1.0, 3.0, std::f64::MAX]);
+
+        let threasholds = dataset.feature_threasholds(1, 3);
+        assert_eq!(threasholds, vec![0.0, 1.0, 3.0, std::f64::MAX]);
+    }
+
 }
 
 // fn write_stats(stats: HashMap<u32, FeatureStat>) -> Result<()> {

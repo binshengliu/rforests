@@ -1,3 +1,6 @@
+// pub mod ranknet;
+pub mod lambdamart;
+
 use util::Result;
 
 #[derive(Debug, Deserialize)]
