@@ -269,6 +269,98 @@ impl<'a> std::fmt::Display for Query<'a> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+struct HistogramBin {
+    // Max value of this bin
+    threashold: f64,
+
+    // Accumulated count of all the values less than or equal to
+    // threashold.
+    acc_count: usize,
+
+    // Accumulated sum of all the values less than or equal to
+    // threashold.
+    acc_sum: f64,
+}
+
+impl HistogramBin {
+    pub fn new(
+        threashold: f64,
+        acc_count: usize,
+        acc_sum: f64,
+    ) -> HistogramBin {
+        HistogramBin {
+            threashold: threashold,
+            acc_count: acc_count,
+            acc_sum: acc_sum,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct FeatureHistogram {
+    // [from, to]
+    bins: Vec<HistogramBin>,
+}
+
+impl FeatureHistogram {
+    pub fn new() -> FeatureHistogram {
+        FeatureHistogram { bins: Vec::new() }
+    }
+
+    /// Construct histograms for given values. Generate a map from the
+    /// original indices into histogram bins.
+    pub fn construct(
+        &mut self,
+        sorted_values_with_indices: Vec<(usize, f64)>,
+        max_bins_count: usize,
+    ) {
+        let mut threasholds: Vec<f64> = sorted_values_with_indices
+            .iter()
+            .map(|&(_index, value)| value)
+            .collect();
+        threasholds.dedup();
+
+        // If too many threasholds, generate at most max_bins_count
+        // threasholds. For example, to split "2, 3, 4, 5, 6" into 5
+        // bins, we compute step = (6 - 2) / (5 - 1) = 1, and get
+        // threasholds "2, 3, 4, 5, 6".
+        if threasholds.len() > max_bins_count {
+            let max = *threasholds.last().unwrap();
+            let min = *threasholds.first().unwrap();
+            let step = (max - min) / max_bins_count as f64;
+            threasholds =
+                (0..max_bins_count).map(|n| min + n as f64 * step).collect();
+        }
+        threasholds.push(std::f64::MAX);
+
+        let mut map_from_dataset_to_bins: Vec<usize> = Vec::new();
+        let nvalues = sorted_values_with_indices.len();
+        map_from_dataset_to_bins.resize(nvalues, 0);
+        let mut pos = 0;
+        let mut acc_count = 0;
+        let mut acc_sum = 0.0;
+        for threashold in threasholds.iter() {
+            let index_in_bins = self.bins.len();
+            for &(original_index, value) in
+                sorted_values_with_indices[pos..].iter()
+            {
+                if value > *threashold {
+                    break;
+                }
+                acc_count += 1;
+                acc_sum += value;
+                map_from_dataset_to_bins[original_index] = index_in_bins;
+            }
+            self.bins.push(
+                HistogramBin::new(*threashold, acc_count, acc_sum),
+            );
+
+            pos = acc_count;
+        }
+    }
+}
+
 pub struct DataSet {
     nfeatures: usize,
     instances: Vec<Instance>,
@@ -363,11 +455,25 @@ impl DataSet {
         indices
     }
 
+    /// Return sorted values of a specific feature.
     pub fn feature_sorted_values(&self, fid: u64) -> Vec<f64> {
         let indices = self.feature_sorted_indices(fid);
         indices
             .into_iter()
             .map(|index| self[index].value(fid))
+            .collect()
+    }
+
+    /// Return sorted values of a specific feature, with the original
+    /// indices in the dataset.
+    pub fn feature_sorted_values_with_indices(
+        &self,
+        fid: u64,
+    ) -> Vec<(usize, f64)> {
+        let indices = self.feature_sorted_indices(fid);
+        indices
+            .into_iter()
+            .map(|index| (index, self[index].value(fid)))
             .collect()
     }
 
@@ -378,21 +484,7 @@ impl DataSet {
         fid: u64,
         max_threasholds_count: usize,
     ) -> Vec<f64> {
-        let mut values = self.feature_sorted_values(fid);
-        values.dedup();
-        if values.len() <= max_threasholds_count {
-            values.push(std::f64::MAX);
-            values
-        } else {
-            let max = values.last().unwrap();
-            let min = values.first().unwrap();
-            let step = (max - min) / max_threasholds_count as f64;
-            let mut v: Vec<f64> = (0..max_threasholds_count)
-                .map(|n| min + n as f64 * step)
-                .collect();
-            v.push(std::f64::MAX);
-            v
-        }
+        unimplemented!()
     }
 }
 
@@ -603,6 +695,37 @@ mod tests {
         assert_eq!(threasholds, vec![0.0, 1.0, 3.0, std::f64::MAX]);
     }
 
+    #[test]
+    fn test_feature_histogram() {
+        let mut histogram = FeatureHistogram::new();
+        // original: vec![5, 7, 3, 2, 1, 8, 9, 4, 6]
+        let sorted_values_with_indices = vec![
+            (4, 1.0),
+            (3, 2.0),
+            (2, 3.0),
+            (7, 4.0),
+            (0, 5.0),
+            (8, 6.0),
+            (1, 7.0),
+            (5, 8.0),
+            (6, 9.0),
+        ];
+
+        histogram.construct(sorted_values_with_indices, 3);
+        assert_eq!(
+            histogram.bins,
+            vec![
+                // threashold: 1.0, values: [1.0]
+                HistogramBin::new(1.0 + 0.0 * 8.0 / 3.0, 1, 1.0),
+                // threashold: 3.66, values: [1.0, 2.0, 3.0]
+                HistogramBin::new(1.0 + 1.0 * 8.0 / 3.0, 3, 6.0),
+                // threashold: 6.33, values: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+                HistogramBin::new(1.0 + 2.0 * 8.0 / 3.0, 6, 21.0),
+                // threashold: MAX, values: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+                HistogramBin::new(std::f64::MAX, 9, 45.0),
+            ]
+        );
+    }
 }
 
 // fn write_stats(stats: HashMap<u32, FeatureStat>) -> Result<()> {
