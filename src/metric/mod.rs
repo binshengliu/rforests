@@ -1,5 +1,7 @@
 pub mod dcg;
+pub mod ndcg;
 pub use self::dcg::DCGScorer;
+pub use self::ndcg::NDCGScorer;
 
 pub trait MetricScorer {
     fn new(truncation_level: usize) -> Self;

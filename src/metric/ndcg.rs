@@ -1,10 +1,11 @@
 use super::MetricScorer;
+use super::DCGScorer;
 
-pub struct DCGScorer {
-    truncation_level: usize,
+pub struct NDCGScorer {
+    dcg: DCGScorer,
 }
 
-impl DCGScorer {
+impl NDCGScorer {
     // Maybe cache the values. But I haven't come up with a method to
     // share the cached values.
     fn discount(&self, i: usize) -> f64 {
@@ -14,22 +15,30 @@ impl DCGScorer {
     fn gain(&self, score: f64) -> f64 {
         score.exp2() - 1.0
     }
+
+    fn max_dcg(&self, labels: &[f64]) -> f64 {
+        use std::cmp::Ordering;
+
+        let mut clone: Vec<f64> = labels.iter().cloned().collect();
+        clone.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
+        self.dcg.score(&clone)
+    }
 }
 
-impl MetricScorer for DCGScorer {
-    fn new(truncation_level: usize) -> DCGScorer {
-        DCGScorer { truncation_level: truncation_level }
+impl MetricScorer for NDCGScorer {
+    fn new(truncation_level: usize) -> NDCGScorer {
+        NDCGScorer {
+            dcg: DCGScorer::new(truncation_level),
+        }
     }
 
     fn score(&self, labels: &[f64]) -> f64 {
-        let n = usize::min(labels.len(), self.truncation_level);
-        (0..n)
-            .map(|i| self.gain(labels[i]) * self.discount(i))
-            .sum()
+        self.dcg.score(labels) / self.max_dcg(labels)
     }
 
     fn delta(&self, labels: &[f64]) -> Vec<Vec<f64>> {
         let nlabels = labels.len();
+
         let mut row: Vec<f64> = Vec::with_capacity(nlabels);
         row.resize(nlabels, 0.0);
 
@@ -40,6 +49,7 @@ impl MetricScorer for DCGScorer {
             for j in i + 1..nlabels {
                 delta[i][j] = (self.gain(labels[i]) - self.gain(labels[j])) *
                     (self.discount(i) - self.discount(j));
+                delta[i][j] /= self.max_dcg(labels);
                 delta[j][i] = delta[i][j];
             }
         }
@@ -53,17 +63,21 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_dcg_score() {
-        let dcg = DCGScorer::new(10);
-        assert_eq!(
-            dcg.score(&vec![3.0, 2.0, 4.0]),
-            7.0 / 2.0_f64.log2() + 3.0 / 3.0_f64.log2() + 15.0 / 4.0_f64.log2()
-        );
+    fn test_ndcg_score() {
+        let ndcg = NDCGScorer::new(10);
+        let dcg = 7.0 / 2.0_f64.log2() + 3.0 / 3.0_f64.log2() +
+            15.0 / 4.0_f64.log2();
+        let max_dcg = 15.0 / 2.0_f64.log2() + 7.0 / 3.0_f64.log2() +
+            3.0 / 4.0_f64.log2();
+        assert_eq!(ndcg.score(&vec![3.0, 2.0, 4.0]), dcg / max_dcg);
     }
 
     #[test]
-    fn test_dcg_delta() {
-        let dcg = DCGScorer::new(10);
+    fn test_ndcg_delta() {
+        let ndcg = NDCGScorer::new(10);
+
+        let max_dcg = 15.0 / 2.0_f64.log2() + 7.0 / 3.0_f64.log2() +
+            3.0 / 4.0_f64.log2();
 
         // 16.392789260714373
         let origin = 7.0 / 2.0_f64.log2() + 3.0 / 3.0_f64.log2() +
@@ -81,13 +95,24 @@ mod test {
         let score_swap_1_2 = 7.0 / 2.0_f64.log2() + 15.0 / 3.0_f64.log2() +
             3.0 / 4.0_f64.log2();
 
-        let result = dcg.delta(&vec![3.0, 2.0, 4.0]);
-        let expected =
+        let result = ndcg.delta(&vec![3.0, 2.0, 4.0]);
+        let expected = vec![
             vec![
-                vec![0.0, origin - score_swap_0_1, origin - score_swap_0_2],
-                vec![origin - score_swap_0_1, 0.0, origin - score_swap_1_2],
-                vec![origin - score_swap_0_2, origin - score_swap_1_2, 0.0],
-            ];
+                0.0,
+                (origin - score_swap_0_1) / max_dcg,
+                (origin - score_swap_0_2) / max_dcg,
+            ],
+            vec![
+                (origin - score_swap_0_1) / max_dcg,
+                0.0,
+                (origin - score_swap_1_2) / max_dcg,
+            ],
+            vec![
+                (origin - score_swap_0_2) / max_dcg,
+                (origin - score_swap_1_2) / max_dcg,
+                0.0,
+            ],
+        ];
 
         let result: Vec<f64> = result.into_iter().flat_map(|row| row).collect();
         let expected: Vec<f64> =
