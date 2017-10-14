@@ -17,6 +17,7 @@ use docopt::Docopt;
 
 pub mod util;
 pub mod format;
+pub mod metric;
 
 use util::Result;
 

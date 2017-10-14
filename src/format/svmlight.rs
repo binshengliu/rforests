@@ -254,8 +254,51 @@ impl<'a> Query<'a> {
         self.qid
     }
 
-    pub fn iter<'i>(&'i self) -> impl Iterator<Item = &Instance> + 'i {
+    pub fn iter(&'a self) -> impl Iterator<Item = &'a Instance> {
         self.dataset[self.start..(self.start + self.len)].iter()
+    }
+
+    /// Return Vec of &Instances sorted by the original labels.
+    pub fn sorted_by_labels(&self) -> Vec<&Instance> {
+        use std::cmp::Ordering;
+
+        let mut indices: Vec<usize> = (self.start..(self.start + self.len))
+            .collect();
+        indices.sort_by(|&index1, &index2| {
+            let label1 = self.dataset[index1].label();
+            let label2 = self.dataset[index2].label();
+
+            // Descending
+            label2.partial_cmp(&label1).unwrap_or(Ordering::Equal)
+        });
+
+        indices
+            .into_iter()
+            .map(move |index| &self.dataset[index])
+            .collect()
+    }
+
+    /// Return Vec of &Instances sorted by the model scores.
+    pub fn sorted_by_model_scores(
+        &self,
+        model_scores: &Vec<f64>,
+    ) -> Vec<&Instance> {
+        use std::cmp::Ordering;
+
+        let mut indices: Vec<usize> = (self.start..(self.start + self.len))
+            .collect();
+        indices.sort_by(|&index1, &index2| {
+            let label1 = model_scores[index1];
+            let label2 = model_scores[index2];
+
+            // Descending
+            label2.partial_cmp(&label1).unwrap_or(Ordering::Equal)
+        });
+
+        indices
+            .into_iter()
+            .map(move |index| &self.dataset[index])
+            .collect()
     }
 }
 
@@ -476,16 +519,6 @@ impl DataSet {
             .map(|index| (index, self[index].value(fid)))
             .collect()
     }
-
-    /// Create at most max_threasholds_count intervals, so the return value
-    /// is at most of length (max_threasholds_count+1).
-    pub fn feature_threasholds(
-        &self,
-        fid: u64,
-        max_threasholds_count: usize,
-    ) -> Vec<f64> {
-        unimplemented!()
-    }
 }
 
 impl std::ops::Deref for DataSet {
@@ -681,18 +714,6 @@ mod tests {
 
         let sorted_indices = dataset.feature_sorted_values(1);
         assert_eq!(sorted_indices, vec![0.0, 1.0, 3.0]);
-    }
-
-    #[test]
-    fn test_feature_threasholds() {
-        let s = "0 qid:1 1:3.0 2:0.0 3:1.0\n2 qid:2 1:1.0 2:1.0 3:3.0\n0 qid:3 1:0.0 2:2.0 3:2.0";
-        let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
-
-        let threasholds = dataset.feature_threasholds(1, 10);
-        assert_eq!(threasholds, vec![0.0, 1.0, 3.0, std::f64::MAX]);
-
-        let threasholds = dataset.feature_threasholds(1, 3);
-        assert_eq!(threasholds, vec![0.0, 1.0, 3.0, std::f64::MAX]);
     }
 
     #[test]

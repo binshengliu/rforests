@@ -34,10 +34,22 @@ impl LambdaMART {
     }
 
     pub fn learn(&self) -> Result<()> {
+        let ntrees = 2000;
+        let ninstances = self.dataset.len();
+        let mut model_scores: Vec<f64> = Vec::with_capacity(ninstances);
+        model_scores.resize(ninstances, 0.0);
+        for i in 0..ntrees {
+            self.computer_lambda(&model_scores);
+        }
         Ok(())
     }
 
-    pub fn computer_lambda(&self) {}
+    pub fn computer_lambda(&self, model_scores: &Vec<f64>) {
+        for query in self.dataset.group_by_queries().iter() {
+            let sorted: Vec<&Instance> =
+                query.sorted_by_model_scores(model_scores);
+        }
+    }
 }
 
 #[cfg(test)]
