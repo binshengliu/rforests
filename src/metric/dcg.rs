@@ -21,6 +21,10 @@ impl MetricScorer for DCGScorer {
         DCGScorer { truncation_level: truncation_level }
     }
 
+    fn name(&self) -> String {
+        format!("DCG@{}", self.truncation_level)
+    }
+
     fn score(&self, labels: &[f64]) -> f64 {
         let n = usize::min(labels.len(), self.truncation_level);
         (0..n)
@@ -58,6 +62,15 @@ mod test {
         assert_eq!(
             dcg.score(&vec![3.0, 2.0, 4.0]),
             7.0 / 2.0_f64.log2() + 3.0 / 3.0_f64.log2() + 15.0 / 4.0_f64.log2()
+        );
+    }
+
+    #[test]
+    fn test_dcg_score_k_is_2() {
+        let dcg = DCGScorer::new(2);
+        assert_eq!(
+            dcg.score(&vec![3.0, 2.0, 4.0]),
+            7.0 / 2.0_f64.log2() + 3.0 / 3.0_f64.log2()
         );
     }
 

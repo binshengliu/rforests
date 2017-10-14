@@ -9,5 +9,8 @@ pub trait MetricScorer {
 
     /// The change in score values by swaping any two of the labels.
     fn delta(&self, labels: &[f64]) -> Vec<Vec<f64>>;
+
+    /// Name of the scorer. For display.
+    fn name(&self) -> String;
 }
 

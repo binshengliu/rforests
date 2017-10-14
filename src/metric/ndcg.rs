@@ -2,6 +2,7 @@ use super::MetricScorer;
 use super::DCGScorer;
 
 pub struct NDCGScorer {
+    truncation_level: usize,
     dcg: DCGScorer,
 }
 
@@ -28,8 +29,13 @@ impl NDCGScorer {
 impl MetricScorer for NDCGScorer {
     fn new(truncation_level: usize) -> NDCGScorer {
         NDCGScorer {
+            truncation_level: truncation_level,
             dcg: DCGScorer::new(truncation_level),
         }
+    }
+
+    fn name(&self) -> String {
+        format!("NDCG@{}", self.truncation_level)
     }
 
     fn score(&self, labels: &[f64]) -> f64 {
@@ -69,6 +75,14 @@ mod test {
             15.0 / 4.0_f64.log2();
         let max_dcg = 15.0 / 2.0_f64.log2() + 7.0 / 3.0_f64.log2() +
             3.0 / 4.0_f64.log2();
+        assert_eq!(ndcg.score(&vec![3.0, 2.0, 4.0]), dcg / max_dcg);
+    }
+
+    #[test]
+    fn test_ndcg_score_k_is_2() {
+        let ndcg = NDCGScorer::new(2);
+        let dcg = 7.0 / 2.0_f64.log2() + 3.0 / 3.0_f64.log2();
+        let max_dcg = 15.0 / 2.0_f64.log2() + 7.0 / 3.0_f64.log2();
         assert_eq!(ndcg.score(&vec![3.0, 2.0, 4.0]), dcg / max_dcg);
     }
 
