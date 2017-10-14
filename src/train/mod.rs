@@ -1,5 +1,6 @@
 // pub mod ranknet;
 pub mod lambdamart;
+pub mod regression_tree;
 
 use util::Result;
 

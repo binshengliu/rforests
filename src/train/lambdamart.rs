@@ -3,23 +3,21 @@ use std::fs::File;
 use format::svmlight::{DataSet, Instance, Query, SvmLightFile};
 use std::collections::HashMap;
 
-struct LambdaMART {}
+pub struct LambdaMART {
+    dataset: DataSet,
+}
 
 impl LambdaMART {
     pub fn new() -> LambdaMART {
-        LambdaMART {}
-    }
-
-    pub fn init() -> Result<()> {
-        Ok(())
-    }
-
-    pub fn learn() -> Result<()> {
         let path = "/home/lbs/code/rforests/data/train-lite.txt";
-        let f = File::open(path)?;
-        let dataset = DataSet::load(f)?;
-        let queries = dataset.group_by_queries();
-        let n_instance = dataset.len();
+        let f = File::open(path).unwrap();
+        let dataset = DataSet::load(f).unwrap();
+        LambdaMART { dataset: dataset }
+    }
+
+    pub fn init(&self) -> Result<()> {
+        let queries = self.dataset.group_by_queries();
+        let n_instance = self.dataset.len();
 
         let mut scores: Vec<f64> = Vec::with_capacity(n_instance);
         scores.resize(n_instance, 0.0);
@@ -34,6 +32,12 @@ impl LambdaMART {
 
         Ok(())
     }
+
+    pub fn learn(&self) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn computer_lambda(&self) {}
 }
 
 #[cfg(test)]
