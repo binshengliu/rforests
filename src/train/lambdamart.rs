@@ -2,6 +2,7 @@ use util::Result;
 use std::fs::File;
 use format::svmlight::{DataSet, Instance, Query, SvmLightFile};
 use std::collections::HashMap;
+use metric::{MetricScorer, NDCGScorer};
 
 pub struct LambdaMART {
     dataset: DataSet,
@@ -38,16 +39,36 @@ impl LambdaMART {
         let ninstances = self.dataset.len();
         let mut model_scores: Vec<f64> = Vec::with_capacity(ninstances);
         model_scores.resize(ninstances, 0.0);
+
+        let mut pseudo_response: Vec<f64> = Vec::with_capacity(ninstances);
+        pseudo_response.resize(ninstances, 0.0);
+
+        let mut weights: Vec<f64> = Vec::with_capacity(ninstances);
+        weights.resize(ninstances, 0.0);
+
         for i in 0..ntrees {
-            self.computer_lambda(&model_scores);
+            self.update_pseudo_response(
+                &model_scores,
+                &mut pseudo_response,
+                &mut weights,
+            );
         }
         Ok(())
     }
 
-    pub fn computer_lambda(&self, model_scores: &Vec<f64>) {
+    pub fn update_pseudo_response(
+        &self,
+        model_scores: &Vec<f64>,
+        pseudo_response: &mut Vec<f64>,
+        weights: &mut Vec<f64>,
+    ) {
+        let ndcg = NDCGScorer::new(10);
         for query in self.dataset.group_by_queries().iter() {
-            let sorted: Vec<&Instance> =
-                query.sorted_by_model_scores(model_scores);
+            let result = query.get_lambda(model_scores, &ndcg);
+            for &(index, lambda, weight) in result.iter() {
+                pseudo_response[index] += lambda;
+                weights[index] += weight;
+            }
         }
     }
 }

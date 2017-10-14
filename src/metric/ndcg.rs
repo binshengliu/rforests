@@ -7,6 +7,13 @@ pub struct NDCGScorer {
 }
 
 impl NDCGScorer {
+    pub fn new(truncation_level: usize) -> NDCGScorer {
+        NDCGScorer {
+            truncation_level: truncation_level,
+            dcg: DCGScorer::new(truncation_level),
+        }
+    }
+
     // Maybe cache the values. But I haven't come up with a method to
     // share the cached values.
     fn discount(&self, i: usize) -> f64 {
@@ -27,13 +34,6 @@ impl NDCGScorer {
 }
 
 impl MetricScorer for NDCGScorer {
-    fn new(truncation_level: usize) -> NDCGScorer {
-        NDCGScorer {
-            truncation_level: truncation_level,
-            dcg: DCGScorer::new(truncation_level),
-        }
-    }
-
     fn name(&self) -> String {
         format!("NDCG@{}", self.truncation_level)
     }

@@ -5,6 +5,7 @@ use std::io::prelude::*;
 use util::Result;
 use std::collections::HashMap;
 use num;
+use metric::{MetricScorer, NDCGScorer};
 
 // Format of the example file. http://svmlight.joachims.org/
 // <line> .=. <target> <feature>:<value> <feature>:<value> ... <feature>:<value> # <info>
@@ -298,6 +299,67 @@ impl<'a> Query<'a> {
         indices
             .into_iter()
             .map(move |index| &self.dataset[index])
+            .collect()
+    }
+
+    pub fn get_lambda<S>(
+        &self,
+        model_scores: &Vec<f64>,
+        metric: &S,
+    ) -> Vec<(usize, f64, f64)>
+    where
+        S: MetricScorer,
+    {
+        use std::cmp::Ordering;
+
+        // indices into DataSet
+        let mut indices: Vec<usize> = (self.start..(self.start + self.len))
+            .collect();
+
+        indices.sort_by(|&index1, &index2| {
+            let label1 = model_scores[index1];
+            let label2 = model_scores[index2];
+
+            // Descending
+            label2.partial_cmp(&label1).unwrap_or(Ordering::Equal)
+        });
+
+        let labels_sorted_by_scores: Vec<f64> = indices
+            .iter()
+            .map(|&index| self.dataset[index].label())
+            .collect();
+        let metric_delta = metric.delta(&labels_sorted_by_scores);
+
+        // hashmap: index -> (lambda, weight)
+        let mut result: HashMap<usize, (f64, f64)> = HashMap::new();
+        for &index1 in indices.iter() {
+            let instance1 = &self.dataset[index1];
+            for &index2 in indices.iter() {
+                let instance2 = &self.dataset[index2];
+                if instance1.label() <= instance2.label() {
+                    continue;
+                }
+
+                let metric_delta_value = metric_delta[index1][index2].abs();
+                let rho = 1.0 /
+                    (1.0 + (model_scores[index1] - model_scores[index2]).exp());
+                let lambda = metric_delta_value * rho;
+                let weight = rho * (1.0 - rho) * metric_delta_value;
+
+                result.entry(index1).or_insert((0.0, 0.0));
+                result.get_mut(&index1).unwrap().0 += lambda;
+                result.get_mut(&index1).unwrap().1 += weight;
+
+                result.entry(index2).or_insert((0.0, 0.0));
+                result.get_mut(&index2).unwrap().0 -= lambda;
+                result.get_mut(&index2).unwrap().1 += weight;
+
+            }
+        }
+
+        result
+            .into_iter()
+            .map(|(key, value)| (key, value.0, value.1))
             .collect()
     }
 }

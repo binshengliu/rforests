@@ -5,6 +5,10 @@ pub struct DCGScorer {
 }
 
 impl DCGScorer {
+    pub fn new(truncation_level: usize) -> DCGScorer {
+        DCGScorer { truncation_level: truncation_level }
+    }
+
     // Maybe cache the values. But I haven't come up with a method to
     // share the cached values.
     fn discount(&self, i: usize) -> f64 {
@@ -17,10 +21,6 @@ impl DCGScorer {
 }
 
 impl MetricScorer for DCGScorer {
-    fn new(truncation_level: usize) -> DCGScorer {
-        DCGScorer { truncation_level: truncation_level }
-    }
-
     fn name(&self) -> String {
         format!("DCG@{}", self.truncation_level)
     }
