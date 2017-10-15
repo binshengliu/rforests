@@ -311,9 +311,29 @@ impl std::fmt::Debug for ThresholdMap {
 pub struct DataSet {
     nfeatures: usize,
     instances: Vec<Instance>,
+    threshold_maps: Vec<ThresholdMap>,
 }
 
 impl DataSet {
+    /// Create a DataSet.
+    fn new(nfeatures: usize, instances: Vec<Instance>) -> DataSet {
+        let mut threshold_maps = Vec::new();
+        for fid in 1..(nfeatures + 1) {
+            let values: Vec<f64> = instances
+                .iter()
+                .map(|instance| instance.value(fid as u64))
+                .collect();
+            let map = ThresholdMap::new(values, 256);
+            threshold_maps.push(map);
+        }
+
+        DataSet {
+            nfeatures: nfeatures,
+            instances: instances,
+            threshold_maps: threshold_maps,
+        }
+    }
+
     /// Load data set from a reader.
     pub fn load<R>(reader: R) -> Result<DataSet>
     where
@@ -322,17 +342,15 @@ impl DataSet {
         let mut nfeatures = 0;
         let instances: Vec<Instance> = SvmLightFile::instances(reader)
             .map(|instance| if let Ok(instance) = instance {
-                nfeatures = u64::max(nfeatures, instance.max_feature_id());
+                nfeatures =
+                    usize::max(nfeatures, instance.max_feature_id() as usize);
                 return Ok(instance);
             } else {
                 instance
             })
             .collect::<Result<Vec<Instance>>>()?;
 
-        Ok(DataSet {
-            nfeatures: nfeatures as usize,
-            instances: instances,
-        })
+        Ok(DataSet::new(nfeatures, instances))
     }
 
     /// Returns the number of instances in the data set, also referred
@@ -462,14 +480,11 @@ impl FromIterator<(f64, u64, Vec<f64>)> for DataSet {
         let mut nfeatures = 0;
         for (label, qid, values) in iter {
             let instance = Instance::from((label, qid, values));
-            nfeatures = u64::max(nfeatures, instance.max_feature_id());
+            nfeatures = usize::max(nfeatures, instance.max_feature_id() as usize);
             instances.push(instance);
         }
 
-        DataSet {
-            nfeatures: nfeatures as usize,
-            instances: instances,
-        }
+        DataSet::new(nfeatures, instances)
     }
 }
 
