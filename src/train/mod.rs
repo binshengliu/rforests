@@ -1,4 +1,5 @@
 // pub mod ranknet;
+pub mod histogram;
 pub mod lambdamart;
 pub mod regression_tree;
 
