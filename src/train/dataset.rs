@@ -313,6 +313,14 @@ impl DataSet {
         queries
     }
 
+    /// Get part of the dataset.
+    pub fn instances_by_indices<'a>(
+        &'a self,
+        indices: &'a [usize],
+    ) -> impl Iterator<Item = &Instance> + 'a {
+        indices.iter().map(move |&index| &self.instances[index])
+    }
+
     pub fn instance_sorted_by_feature<'a>(
         &'a self,
         fid: u64,

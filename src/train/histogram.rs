@@ -116,6 +116,37 @@ impl FeatureHistogram {
             acc = bin.acc_sum;
         }
     }
+
+    /// Return best (threashold, s value)
+    pub fn best_split(&self, min_leaf: usize) -> Option<(f64, f64)> {
+        let sum = self.bins.last().unwrap().acc_sum;
+        let count = self.bins.last().unwrap().acc_count;
+        let mut split: Option<(f64, f64)> = None;
+        for (index, bin) in self.bins.iter().enumerate() {
+            let count_left = bin.acc_count;
+            let count_right = count - count_left;
+            if count_left < min_leaf || count_right < min_leaf {
+                continue;
+            }
+
+            let sum_left = bin.acc_sum;
+            let sum_right = sum - sum_left;
+
+            let s = sum_left * sum_left / count_left as f64 +
+                sum_right * sum_right / count_right as f64;
+
+            match split {
+                Some((old_s, _old_threashold)) => {
+                    if s > old_s {
+                        split = Some((bin.threashold, s));
+                    }
+                }
+                None => split = Some((bin.threashold, s)),
+            }
+        }
+
+        split
+    }
 }
 
 pub struct Histogram {
