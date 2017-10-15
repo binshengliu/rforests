@@ -522,7 +522,8 @@ impl<'a> DataSetSample<'a> {
         let (left_indices, right_indices) =
             sorted.enumerate().fold(
                 (Vec::new(), Vec::new()),
-                |(mut left, mut right), (index, instance)| if instance.value(fid) <=
+                |(mut left, mut right),
+                 (index, instance)| if instance.value(fid) <=
                     threashold
                 {
                     left.push(index);
