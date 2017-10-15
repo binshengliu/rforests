@@ -53,14 +53,18 @@ impl Instance {
     }
 }
 
+impl From<(f64, u64, Vec<f64>)> for Instance {
+    fn from((label, qid, values): (f64, u64, Vec<f64>)) -> Instance {
+        Instance::new(label, qid, values)
+    }
+}
+
 impl std::fmt::Display for Instance {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut values = self.values
             .iter()
             .enumerate()
-        // skip index 0
-            .skip(1)
-            .map(|(index, value)| format!("{}:{}", index, value))
+            .map(|(index, value)| format!("{}:{}", index + 1, value))
             .collect::<Vec<_>>();
 
         let mut v = vec![self.label.to_string(), format!("qid:{}", self.qid)];
@@ -242,11 +246,11 @@ impl DataSet {
     {
         let mut nfeatures = 0;
         let instances: Vec<Instance> = SvmLightFile::instances(reader)
-            .map(|i| if let Ok(instance) = i {
+            .map(|instance| if let Ok(instance) = instance {
                 nfeatures = u64::max(nfeatures, instance.max_feature_id());
                 return Ok(instance);
             } else {
-                i
+                instance
             })
             .collect::<Result<Vec<Instance>>>()?;
 
@@ -367,17 +371,38 @@ impl DataSet {
             .collect()
     }
 
-    pub fn feature_histogram(
-        &self,
-        fid: u64,
-        max_bins: usize,
-    ) -> FeatureHistogram {
-        let indices = self.feature_sorted_indices(fid);
-        let values: Vec<(usize, f64, f64)> = indices
-            .into_iter()
-            .map(|index| (index, self[index].label(), self[index].value(fid)))
-            .collect();
-        FeatureHistogram::new(&values, max_bins)
+    // pub fn feature_histogram(
+    //     &self,
+    //     fid: u64,
+    //     max_bins: usize,
+    // ) -> FeatureHistogram {
+    //     let indices = self.feature_sorted_indices(fid);
+    //     let values: Vec<(usize, f64, f64)> = indices
+    //         .into_iter()
+    //         .map(|index| (index, self[index].label(), self[index].value(fid)))
+    //         .collect();
+    //     FeatureHistogram::new(&values, max_bins)
+    // }
+}
+
+use std::iter::FromIterator;
+impl FromIterator<(f64, u64, Vec<f64>)> for DataSet {
+    fn from_iter<T>(iter: T) -> DataSet
+    where
+        T: IntoIterator<Item = (f64, u64, Vec<f64>)>,
+    {
+        let mut instances = Vec::new();
+        let mut nfeatures = 0;
+        for (label, qid, values) in iter {
+            let instance = Instance::from((label, qid, values));
+            nfeatures = u64::max(nfeatures, instance.max_feature_id());
+            instances.push(instance);
+        }
+
+        DataSet {
+            nfeatures: nfeatures as usize,
+            instances: instances,
+        }
     }
 }
 
@@ -410,6 +435,20 @@ impl<'a> DataSetSample<'a> {
         self.indices.iter().map(move |&index| &self.dataset[index])
     }
 
+    /// Creates an iterator which gives the index of the Instance as
+    /// well as the Instance.
+    ///
+    /// The iterator returned yields pairs (i, instance), where i is
+    /// the index of Instance and instance is the reference to the
+    /// Instance returned by the iterator.
+    pub fn enumerate(
+        &'a self,
+    ) -> impl Iterator<Item = (usize, &Instance)> + 'a {
+        self.indices.iter().map(move |&index| {
+            (index, &self.dataset[index])
+        })
+    }
+
     /// Returns an iterator over the feature ids in the data set
     /// sample.
     pub fn fid_iter(&self) -> impl Iterator<Item = u64> {
@@ -440,11 +479,12 @@ impl<'a> DataSetSample<'a> {
     /// Returns a copy of the data set sample, sorted by the given
     /// feature.
     fn sorted_indices_by_feature(&self, fid: u64) -> Vec<usize> {
+        use std::cmp::Ordering::Equal;
         let mut indices = self.indices.clone();
         indices.sort_by(|&index1, &index2| {
             let value1 = self.dataset[index1].value(fid);
             let value2 = self.dataset[index2].value(fid);
-            value1.partial_cmp(&value2).unwrap()
+            value1.partial_cmp(&value2).unwrap_or(Equal)
         });
         indices
     }
@@ -455,24 +495,46 @@ impl<'a> DataSetSample<'a> {
         fid: u64,
         max_bins: usize,
     ) -> FeatureHistogram {
-        let sorted_indices = self.sorted_indices_by_feature(fid);
+        let sorted = self.sorted_by_feature(fid);
 
-        let values: Vec<(usize, f64, f64)> = sorted_indices
-            .into_iter()
-            .map(|index| {
-                (
-                    index,
-                    self.dataset[index].label(),
-                    self.dataset[index].value(fid),
-                )
-            })
-            .collect();
-        FeatureHistogram::new(&values, max_bins)
+        FeatureHistogram::new(&sorted, fid, max_bins)
     }
 
     /// Returns histograms of all the features of the data set sample.
-    pub fn histogram(&self, max_bins: usize) -> Histogram {
+    fn histogram(&self, max_bins: usize) -> Histogram {
         Histogram::new(self, max_bins)
+    }
+
+    pub fn split(&self) -> Option<(DataSetSample, DataSetSample)> {
+        let mut splits: Vec<(u64, f64, f64)> = Vec::new();
+        for fid in self.fid_iter() {
+            let sorted: DataSetSample = self.sorted_by_feature(fid);
+            let feature_histogram = FeatureHistogram::new(&sorted, fid, 256);
+            let split = feature_histogram.best_split(1);
+            if split.is_none() {
+                continue;
+            }
+
+            let (threshold, s) = split.unwrap();
+            splits.push((fid, threshold, s));
+        }
+
+        // Find the split with the best s value;
+        let best_split =
+            splits.iter().max_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+
+        unimplemented!()
+    }
+}
+
+impl<'a> From<&'a DataSet> for DataSetSample<'a> {
+    fn from(dataset: &'a DataSet) -> DataSetSample<'a> {
+        let len = dataset.len();
+        let indices: Vec<usize> = (0..len).collect();
+        DataSetSample {
+            dataset: dataset,
+            indices: indices,
+        }
     }
 }
 

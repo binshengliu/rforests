@@ -1,7 +1,7 @@
 use std;
 use train::dataset::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 struct HistogramBin {
     // Max value of this bin
     threashold: f64,
@@ -27,6 +27,22 @@ impl HistogramBin {
     }
 }
 
+impl std::fmt::Debug for HistogramBin {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "HistogramBin {{ threashold: {}, acc_count: {}, acc_sum: {} }}",
+            if self.threashold == std::f64::MAX {
+                "f64::MAX".to_string()
+            } else {
+                self.threashold.to_string()
+            },
+            self.acc_count,
+            self.acc_sum.to_string()
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct FeatureHistogram {
     // [from, to]
@@ -38,11 +54,13 @@ pub struct FeatureHistogram {
 
 impl FeatureHistogram {
     /// Generate threasholds vec from values and max bins.
-    fn threasholds(values: &[(usize, f64, f64)], max_bins: usize) -> Vec<f64> {
-        let mut threasholds: Vec<f64> = values
-            .iter()
-            .map(|&(_index, _label, value)| value)
-            .collect();
+    fn threasholds(
+        sample: &DataSetSample,
+        fid: u64,
+        max_bins: usize,
+    ) -> Vec<f64> {
+        let mut threasholds: Vec<f64> =
+            sample.iter().map(|instance| instance.value(fid)).collect();
         threasholds.dedup();
 
         // If too many threasholds, generate at most max_bins
@@ -59,37 +77,41 @@ impl FeatureHistogram {
     }
 
     /// Construct histograms for given values. Generate a map from the
-    /// original indices into histogram bins.
+    /// original indices into histogram bins. `sorted_sample` must be
+    /// sorted on `fid`.
     pub fn new(
-        values: &[(usize, f64, f64)],
+        sorted_sample: &DataSetSample,
+        fid: u64,
         max_bins: usize,
     ) -> FeatureHistogram {
-        let nvalues = values.len();
+        let nvalues = sorted_sample.len();
         let mut bin_index_map: Vec<usize> = Vec::new();
         bin_index_map.resize(nvalues, 0);
         let mut bins: Vec<HistogramBin> = Vec::new();
 
-        let mut pos = 0;
         let mut acc_count = 0;
         let mut acc_sum = 0.0;
 
         let threasholds: Vec<f64> =
-            FeatureHistogram::threasholds(values, max_bins);
+            FeatureHistogram::threasholds(sorted_sample, fid, max_bins);
 
-        for threashold in threasholds.iter() {
-            let index_in_bins = bins.len();
-            for &(index, label, value) in values[pos..].iter() {
-                if value > *threashold {
-                    break;
+        let mut current = 0;
+        for (index, instance) in sorted_sample.enumerate() {
+            if instance.value(fid) > threasholds[current] {
+                bins.push(
+                    HistogramBin::new(threasholds[current], acc_count, acc_sum),
+                );
+                // The last value in threasholds is f64::MAX, so the
+                // index can't exceed its length.
+                while instance.value(fid) > threasholds[current] {
+                    current += 1;
                 }
-                acc_count += 1;
-                acc_sum += label;
-                bin_index_map[index] = index_in_bins;
             }
-            bins.push(HistogramBin::new(*threashold, acc_count, acc_sum));
-
-            pos = acc_count;
+            acc_count += 1;
+            acc_sum += instance.label();
+            bin_index_map[index] = bins.len();
         }
+        bins.push(HistogramBin::new(threasholds[current], acc_count, acc_sum));
 
         FeatureHistogram {
             bins: bins,
@@ -210,43 +232,24 @@ mod test {
 
     #[test]
     fn test_feature_histogram() {
-        // (label, feature_value)
+        // (label, qid, feature_values)
         let data = vec![
-            (3.0, 5.0),
-            (2.0, 7.0),
-            (3.0, 3.0),
-            (1.0, 2.0),
-            (0.0, 1.0),
-            (2.0, 8.0),
-            (4.0, 9.0),
-            (1.0, 4.0),
-            (0.0, 6.0),
+            (3.0, 1, vec![5.0]),
+            (2.0, 1, vec![7.0]),
+            (3.0, 1, vec![3.0]),
+            (1.0, 1, vec![2.0]),
+            (0.0, 1, vec![1.0]),
+            (2.0, 1, vec![8.0]),
+            (4.0, 1, vec![9.0]),
+            (1.0, 1, vec![4.0]),
+            (0.0, 1, vec![6.0]),
         ];
-        // sorted by featuer_value, (index, label, feature_value):
-        // (4, 0.0, 1.0),
-        // (3, 1.0, 2.0),
-        // (2, 3.0, 3.0),
-        // (7, 1.0, 4.0),
-        // (0, 3.0, 5.0),
-        // (8, 0.0, 6.0),
-        // (1, 2.0, 7.0),
-        // (5, 2.0, 8.0),
-        // (6, 4.0, 9.0),
 
-        let mut data: Vec<(usize, f64, f64)> = data.iter()
-            .enumerate()
-            .map(|(index, &(label, value))| (index, label, value))
-            .collect();
+        let dataset: DataSet = data.into_iter().collect();
+        let sample = DataSetSample::from(&dataset);
+        let sample = sample.sorted_by_feature(1);
 
-        // Sort by values in non-descending order.
-        data.sort_by(|&(_index1, _label1, value1),
-         &(_index2, _label2, value2)| {
-            value1.partial_cmp(&value2).unwrap_or(
-                std::cmp::Ordering::Equal,
-            )
-        });
-
-        let mut histogram = FeatureHistogram::new(&data, 3);
+        let mut histogram = FeatureHistogram::new(&sample, 1, 3);
         assert_eq!(
             histogram.bins,
             vec![
