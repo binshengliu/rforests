@@ -4,6 +4,8 @@ use train::histogram::*;
 use util::Result;
 use format::svmlight::*;
 use std;
+use std::cmp::Ordering::*;
+
 
 #[derive(Debug, PartialEq)]
 pub struct Instance {
@@ -229,6 +231,79 @@ impl<'a> std::fmt::Display for Query<'a> {
             .collect::<Vec<String>>();
 
         write!(f, "{}", v.join("\n"))
+    }
+}
+
+struct ThresholdMap {
+    thresholds: Vec<f64>,
+    map: Vec<usize>,
+}
+
+impl ThresholdMap {
+    fn thresholds(sorted_values: Vec<f64>, max_bins: usize) -> Vec<f64> {
+        let mut thresholds = sorted_values;
+
+        // If too many values, generate at most max_bins thresholds.
+        if thresholds.len() > max_bins {
+            let max = *thresholds.last().unwrap();
+            let min = *thresholds.first().unwrap();
+            let step = (max - min) / max_bins as f64;
+            thresholds = (0..max_bins).map(|n| min + n as f64 * step).collect();
+        }
+        thresholds.push(std::f64::MAX);
+        thresholds
+    }
+
+    pub fn new(values: Vec<f64>, max_bins: usize) -> ThresholdMap {
+        let nvalues = values.len();
+
+        let mut indexed_values: Vec<(usize, f64)> =
+            values.iter().cloned().enumerate().collect();
+        indexed_values.sort_by(|&(_, a), &(_, b)| {
+            a.partial_cmp(&b).unwrap_or(Less)
+        });
+
+        let sorted_values = indexed_values
+            .iter()
+            .map(|&(_, value)| value)
+            .collect::<Vec<f64>>();
+        let thresholds = ThresholdMap::thresholds(sorted_values, max_bins);
+        let mut map: Vec<usize> = Vec::new();
+        map.resize(nvalues, 0);
+
+        let mut value_pos = 0;
+        for (threshold_index, &threshold) in thresholds.iter().enumerate() {
+            for &(value_index, value) in indexed_values[value_pos..].iter() {
+                if value > threshold {
+                    break;
+                }
+                map[value_index] = threshold_index;
+                value_pos += 1;
+            }
+        }
+        ThresholdMap {
+            thresholds: thresholds,
+            map: map,
+        }
+    }
+}
+
+impl std::fmt::Debug for ThresholdMap {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "ThresholdMap {{ thresholds: {:?}, map: {:?} }}",
+            self.thresholds
+                .iter()
+                .map(|&threshold| if threshold == std::f64::MAX {
+                    "f64::MAX".to_string()
+                } else {
+                    threshold.to_string()
+                })
+                .collect::<Vec<String>>()
+                .join(", "),
+            self.map
+        )
     }
 }
 
@@ -575,5 +650,24 @@ mod tests {
 
         let sorted_indices = dataset.feature_sorted_values(1);
         assert_eq!(sorted_indices, vec![0.0, 1.0, 3.0]);
+    }
+
+    #[test]
+    fn test_threshold_map() {
+        let values = vec![5.0, 7.0, 3.0, 2.0, 1.0, 8.0, 9.0, 4.0, 6.0];
+
+        let map = ThresholdMap::new(values, 3);
+
+        assert_eq!(
+            map.thresholds,
+            vec![
+                1.0 + 0.0 * 8.0 / 3.0, // 1.0
+                1.0 + 1.0 * 8.0 / 3.0, // 3.66
+                1.0 + 2.0 * 8.0 / 3.0, // 6.33
+                std::f64::MAX,
+            ]
+        );
+
+        assert_eq!(map.map, vec![2, 3, 1, 1, 0, 3, 3, 2, 2]);
     }
 }
