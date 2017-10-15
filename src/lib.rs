@@ -9,7 +9,6 @@ extern crate serde_derive;
 extern crate serde;
 extern crate docopt;
 extern crate env_logger;
-extern crate num;
 
 use std::env;
 use serde::Deserialize;

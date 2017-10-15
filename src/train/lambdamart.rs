@@ -1,8 +1,8 @@
 use util::Result;
 use std::fs::File;
-use format::svmlight::{DataSet, Instance, Query, SvmLightFile};
-use std::collections::HashMap;
-use metric::{MetricScorer, NDCGScorer};
+use metric::NDCGScorer;
+use super::regression_tree::RegressionTree;
+use train::dataset::DataSet;
 
 pub struct LambdaMART {
     dataset: DataSet,
@@ -52,6 +52,8 @@ impl LambdaMART {
                 &mut pseudo_response,
                 &mut weights,
             );
+
+            let tree = RegressionTree::fit(&self.dataset);
         }
         Ok(())
     }

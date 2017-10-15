@@ -1,4 +1,4 @@
-use format::svmlight::DataSet;
+use train::dataset::DataSet;
 
 pub struct RegressionTree {}
 
