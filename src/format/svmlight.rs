@@ -276,9 +276,9 @@ impl SvmLightFile {
             fields.iter().map(|&s| parse(s)).collect::<Result<_>>()?;
         let max_id = v.iter().max_by_key(|e| e.0).unwrap().0;
         let mut ret: Vec<f64> = Vec::with_capacity(max_id as usize + 1);
-        ret.resize(max_id as usize + 1, 0.0);
+        ret.resize(max_id as usize, 0.0);
         for &(id, value) in v.iter() {
-            ret[id as usize] = value;
+            ret[(id - 1) as usize] = value;
         }
 
         Ok(ret)
@@ -343,7 +343,7 @@ mod tests {
         let (label, qid, values) = SvmLightFile::parse_str(s).unwrap();
         assert_eq!(label, 3.0);
         assert_eq!(qid, 3864);
-        assert_eq!(values, vec![0.0, 3.0, 9.0, 0.0, 3.0]);
+        assert_eq!(values, vec![3.0, 9.0, 0.0, 3.0]);
     }
 }
 // @Feature id:2 name:abc

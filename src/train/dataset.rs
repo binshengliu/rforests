@@ -5,11 +5,11 @@ use util::Result;
 use format::svmlight::*;
 use std;
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Instance {
     qid: u64,
     label: f64, // or label
-    values: Vec<f64>, // index from 1
+    values: Vec<f64>, // index from 0
 }
 
 impl Instance {
@@ -37,11 +37,11 @@ impl Instance {
 
     /// Return feature value of feature id.
     pub fn value(&self, id: u64) -> f64 {
-        self.values.get(id as usize).map_or(0.0, |v| *v)
+        self.values.get((id - 1) as usize).map_or(0.0, |v| *v)
     }
 
     pub fn max_feature_id(&self) -> u64 {
-        self.values.len() as u64
+        (self.values.len() + 1 )as u64
     }
 
     pub fn label(&self) -> f64 {
