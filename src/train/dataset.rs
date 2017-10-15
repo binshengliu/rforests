@@ -506,7 +506,8 @@ impl<'a> DataSetSample<'a> {
     }
 
     pub fn split(&self) -> Option<(DataSetSample, DataSetSample)> {
-        let mut splits: Vec<(u64, f64, f64)> = Vec::new();
+        // (fid, threashold, s, sorted data)
+        let mut splits: Vec<(u64, f64, f64, DataSetSample)> = Vec::new();
         for fid in self.fid_iter() {
             let sorted: DataSetSample = self.sorted_by_feature(fid);
             let feature_histogram = FeatureHistogram::new(&sorted, fid, 256);
@@ -516,12 +517,29 @@ impl<'a> DataSetSample<'a> {
             }
 
             let (threshold, s) = split.unwrap();
-            splits.push((fid, threshold, s));
+            splits.push((fid, threshold, s, sorted));
         }
 
         // Find the split with the best s value;
-        let best_split =
-            splits.iter().max_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
+        let (fid, threashold, s, sorted) = splits
+            .into_iter()
+            .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap())
+            .unwrap();
+
+        //
+        let (left_indices, right_indices) =
+            sorted.enumerate().fold(
+                (Vec::new(), Vec::new()),
+                |(mut left, mut right), (index, instance)| if instance.value(fid) <=
+                    threashold
+                {
+                    left.push(index);
+                    (left, right)
+                } else {
+                    right.push(index);
+                    (left, right)
+                },
+            );
 
         unimplemented!()
     }
