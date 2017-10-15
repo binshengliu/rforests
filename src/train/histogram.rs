@@ -161,9 +161,9 @@ pub struct Histogram {
 }
 
 impl Histogram {
-    pub fn new(dataset: &DataSet, max_bins: usize) -> Histogram {
+    pub fn new(dataset: &DataSetSample, max_bins: usize) -> Histogram {
         // Sum of labels and sum of squared labels.
-        let (sum, sq_sum) = dataset.labels_iter().fold(
+        let (sum, sq_sum) = dataset.label_iter().fold(
             (0.0, 0.0),
             |(sum, sq_sum), label| {
                 (sum + label, sq_sum + label * label)

@@ -228,12 +228,14 @@ impl<'a> std::fmt::Display for Query<'a> {
     }
 }
 
+/// A collection type containing a data set.
 pub struct DataSet {
     nfeatures: usize,
     instances: Vec<Instance>,
 }
 
 impl DataSet {
+    /// Load data set from a reader.
     pub fn load<R>(reader: R) -> Result<DataSet>
     where
         R: ::std::io::Read,
@@ -254,18 +256,19 @@ impl DataSet {
         })
     }
 
+    /// Returns the number of instances in the data set, also referred
+    /// to as its 'length'.
+    pub fn len(&self) -> usize {
+        self.instances.len()
+    }
+
+    /// Returns an iterator over the feature ids in the data set.
     pub fn fid_iter(&self) -> impl Iterator<Item = u64> {
         (1..(self.nfeatures + 1)).map(|i| i as u64)
     }
 
-    pub fn labels(&self) -> Vec<f64> {
-        self.instances
-            .iter()
-            .map(|instance| instance.label)
-            .collect()
-    }
-
-    pub fn labels_iter<'a>(&'a self) -> impl Iterator<Item = f64> + 'a {
+    /// Returns an iterator over the labels in the data set.
+    pub fn label_iter<'a>(&'a self) -> impl Iterator<Item = f64> + 'a {
         self.instances.iter().map(|instance| instance.label)
     }
 
@@ -376,10 +379,6 @@ impl DataSet {
             .collect();
         FeatureHistogram::new(&values, max_bins)
     }
-
-    pub fn histogram(&self, max_bins: usize) -> Histogram {
-        Histogram::new(self, max_bins)
-    }
 }
 
 impl std::ops::Deref for DataSet {
@@ -387,6 +386,93 @@ impl std::ops::Deref for DataSet {
 
     fn deref(&self) -> &Vec<Instance> {
         &self.instances
+    }
+}
+
+/// A collection type containing part of a data set.
+pub struct DataSetSample<'a> {
+    /// Original data
+    dataset: &'a DataSet,
+
+    /// Indices into Dataset
+    indices: Vec<usize>,
+}
+
+impl<'a> DataSetSample<'a> {
+    /// Returns the number of instances in the data set sample, also
+    /// referred to as its 'length'.
+    pub fn len(&self) -> usize {
+        self.indices.len()
+    }
+
+    /// Returns an iterator over the data set sample.
+    pub fn iter(&'a self) -> impl Iterator<Item = &Instance> + 'a {
+        self.indices.iter().map(move |&index| &self.dataset[index])
+    }
+
+    /// Returns an iterator over the feature ids in the data set
+    /// sample.
+    pub fn fid_iter(&self) -> impl Iterator<Item = u64> {
+        self.dataset.fid_iter()
+    }
+
+    /// Returns an iterator over the labels in the data set sample.
+    pub fn label_iter(&'a self) -> impl Iterator<Item = f64> + 'a {
+        self.iter().map(|instance| instance.label)
+    }
+
+    /// Returns an iterator over the values of the given feature in
+    /// the data set sample.
+    pub fn value_iter(&'a self, fid: u64) -> impl Iterator<Item = f64> + 'a {
+        self.iter().map(move |instance| instance.value(fid))
+    }
+
+    /// Returns a copy of the data set sample, sorted by the given
+    /// feature.
+    pub fn sorted_by_feature(&self, fid: u64) -> DataSetSample {
+        let indices = self.sorted_indices_by_feature(fid);
+        DataSetSample {
+            dataset: self.dataset,
+            indices: indices,
+        }
+    }
+
+    /// Returns a copy of the data set sample, sorted by the given
+    /// feature.
+    fn sorted_indices_by_feature(&self, fid: u64) -> Vec<usize> {
+        let mut indices = self.indices.clone();
+        indices.sort_by(|&index1, &index2| {
+            let value1 = self.dataset[index1].value(fid);
+            let value2 = self.dataset[index2].value(fid);
+            value1.partial_cmp(&value2).unwrap()
+        });
+        indices
+    }
+
+    /// Returns a histogram of the feature of the data set sample.
+    pub fn feature_histogram(
+        &self,
+        fid: u64,
+        max_bins: usize,
+    ) -> FeatureHistogram {
+        let sorted_indices = self.sorted_indices_by_feature(fid);
+
+        let values: Vec<(usize, f64, f64)> = sorted_indices
+            .into_iter()
+            .map(|index| {
+                (
+                    index,
+                    self.dataset[index].label(),
+                    self.dataset[index].value(fid),
+                )
+            })
+            .collect();
+        FeatureHistogram::new(&values, max_bins)
+    }
+
+    /// Returns histograms of all the features of the data set sample.
+    pub fn histogram(&self, max_bins: usize) -> Histogram {
+        Histogram::new(self, max_bins)
     }
 }
 
