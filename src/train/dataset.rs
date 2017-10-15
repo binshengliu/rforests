@@ -41,7 +41,7 @@ impl Instance {
     }
 
     pub fn max_feature_id(&self) -> u64 {
-        (self.values.len() + 1 )as u64
+        (self.values.len() + 1) as u64
     }
 
     pub fn label(&self) -> f64 {
