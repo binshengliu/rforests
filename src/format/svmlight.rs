@@ -188,11 +188,11 @@ impl FilesStats {
 pub struct SvmLightFile;
 
 impl SvmLightFile {
-    // Returning an abstract type is not well supported now. The Rust
-    // team is working on it:
-    // https://stackoverflow.com/questions/27535289/correct-way-to-return-an-iterator/27535594#27535594
-    // https://github.com/rust-lang/rfcs/blob/master/text/1522-conservative-impl-trait.md
-    pub fn instances<R>(reader: R) -> impl Iterator<Item = Result<Instance>>
+    /// Read from reader and create (label, qid, values) tuple for
+    /// each line.
+    pub fn parse_reader<R>(
+        reader: R,
+    ) -> impl Iterator<Item = Result<(f64, u64, Vec<f64>)>>
     where
         R: std::io::Read,
     {
@@ -216,9 +216,87 @@ impl SvmLightFile {
                 // Change the error type to match the function signature
                 .map_err(|e| e.description().into())
                 .and_then(|line| {
-                    Instance::from_str(line.as_str())
+                    SvmLightFile::parse_str(line.as_str())
                 })
             })
+    }
+
+    /// Read from reader and create Instance struct for each line.
+    pub fn instances<R>(reader: R) -> impl Iterator<Item = Result<Instance>>
+    where
+        R: std::io::Read,
+    {
+        SvmLightFile::parse_reader(reader).map(|parse_result| {
+            parse_result.map(|(label, qid, values)| {
+                Instance::new(label, qid, values)
+            })
+        })
+    }
+
+    /// Parse "3".
+    fn parse_label(label: &str) -> Result<f64> {
+        let label = label.parse::<f64>()?;
+        Ok(label)
+    }
+
+    /// Parse "qid:3333".
+    fn parse_qid(qid: &str) -> Result<u64> {
+        let v: Vec<&str> = qid.split(':').collect();
+        if v.len() != 2 {
+            Err(format!("Invalid qid field: {}", qid))?;
+        }
+
+        if v[0] != "qid" {
+            Err(format!("Invalid qid field: {}", v[0]))?;
+        }
+
+        let qid = v[1].parse::<u64>()?;
+
+        Ok(qid)
+    }
+
+    /// Parse &["1:3.0" "3:4.0"] into Vec of values. Absent indices
+    /// are filled with 0.0. The example above would result vec![0.0,
+    /// 3.0, 0.0, 4.0].
+    fn parse_values(fields: &[&str]) -> Result<Vec<f64>> {
+        fn parse(s: &str) -> Result<(u64, f64)> {
+            let v: Vec<&str> = s.split(':').collect();
+            if v.len() != 2 {
+                Err(format!("Invalid string: {}", s))?;
+            }
+
+            let id = v[0].parse::<u64>()?;
+            let value = v[1].parse::<f64>()?;
+
+            Ok((id, value))
+        }
+
+        // (id, value) pairs
+        let v: Vec<(u64, f64)> =
+            fields.iter().map(|&s| parse(s)).collect::<Result<_>>()?;
+        let max_id = v.iter().max_by_key(|e| e.0).unwrap().0;
+        let mut ret: Vec<f64> = Vec::with_capacity(max_id as usize + 1);
+        ret.resize(max_id as usize + 1, 0.0);
+        for &(id, value) in v.iter() {
+            ret[id as usize] = value;
+        }
+
+        Ok(ret)
+    }
+
+    /// Parse "3.0 qid:3864 1:3.000000 2:9.000000 4:3.0 # 3:10.0".
+    pub fn parse_str(s: &str) -> Result<(f64, u64, Vec<f64>)> {
+        let line: &str = s.trim().split('#').next().unwrap().trim();
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if fields.len() < 2 {
+            Err(format!("Invalid line"))?;
+        }
+
+        let label = SvmLightFile::parse_label(fields[0])?;
+        let qid = SvmLightFile::parse_qid(fields[1])?;
+        let values: Vec<f64> = SvmLightFile::parse_values(&fields[2..])?;
+
+        Ok((label, qid, values))
     }
 
     // pub fn write_compact_format(
@@ -255,6 +333,19 @@ impl SvmLightFile {
 //     Ok(())
 // }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_line_parse() {
+        let s = "3.0 qid:3864 1:3.000000 2:9.000000 4:3.0 # 3:10.0";
+        let (label, qid, values) = SvmLightFile::parse_str(s).unwrap();
+        assert_eq!(label, 3.0);
+        assert_eq!(qid, 3864);
+        assert_eq!(values, vec![0.0, 3.0, 9.0, 0.0, 3.0]);
+    }
+}
 // @Feature id:2 name:abc
 // Record min and max value for each feature.
 // Max feature Id.
