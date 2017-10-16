@@ -379,7 +379,9 @@ impl std::fmt::Debug for ThresholdMap {
     }
 }
 
-/// A collection type containing a data set.
+/// A collection type containing a data set. The DataSet is a static
+/// data structure. See also TrainingDataSet which is a mutable data
+/// structure that its label values get updated after each training.
 pub struct DataSet {
     nfeatures: usize,
     instances: Vec<Instance>,
@@ -630,6 +632,11 @@ impl<'a> DataSetSample<'a> {
         self.iter().map(move |instance| instance.value(fid))
     }
 
+    /// Returns the average value of the labels.
+    pub fn label_avg(&self) -> f64 {
+        self.label_iter().sum::<f64>() / (self.len() as f64)
+    }
+
     /// Returns a copy of the data set sample, sorted by the given
     /// feature.
     pub fn sorted_by_feature(&self, fid: Id) -> DataSetSample {
@@ -667,44 +674,51 @@ impl<'a> DataSetSample<'a> {
         Histogram::new(self, max_bins)
     }
 
-    pub fn split(&self) -> Option<(DataSetSample, DataSetSample)> {
-        // (fid, threashold, s, sorted data)
-        let mut splits: Vec<(Id, Value, Value, DataSetSample)> = Vec::new();
+    /// Split self. Returns (split feature, threshold, s value, left
+    /// child, right child).
+    pub fn split(
+        &self,
+        min_leaf_count: usize,
+    ) -> Option<(Id, Value, f64, DataSetSample, DataSetSample)> {
+        assert!(min_leaf_count > 0);
+        // (fid, threshold, s)
+        let mut splits: Vec<(Id, Value, f64)> = Vec::new();
         for fid in self.fid_iter() {
-            let sorted: DataSetSample = self.sorted_by_feature(fid);
             let feature_histogram = self.feature_histogram(fid);
-            let split = feature_histogram.best_split(1);
-            if split.is_none() {
-                continue;
+            let split = feature_histogram.best_split(min_leaf_count);
+            match split {
+                Some((threshold, s)) => splits.push((fid, threshold, s)),
+                None => continue,
             }
-
-            let (threshold, s) = split.unwrap();
-            splits.push((fid, threshold, s, sorted));
         }
 
         // Find the split with the best s value;
-        let (fid, threashold, s, sorted) = splits
-            .into_iter()
-            .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap())
-            .unwrap();
+        let (fid, threshold, s) = match splits.into_iter().max_by(|a, b| {
+            a.2.partial_cmp(&b.2).unwrap()
+        }) {
+            Some((fid, threshold, s)) => (fid, threshold, s),
+            None => return None,
+        };
 
-        //
-        let (left_indices, right_indices) =
-            sorted.enumerate().fold(
-                (Vec::new(), Vec::new()),
-                |(mut left, mut right),
-                 (index, instance)| if instance.value(fid) <=
-                    threashold
-                {
-                    left.push(index);
-                    (left, right)
-                } else {
-                    right.push(index);
-                    (left, right)
-                },
-            );
+        let mut left_indices = Vec::new();
+        let mut right_indices = Vec::new();
+        for (index, instance) in self.enumerate() {
+            if instance.value(fid) <= threshold {
+                left_indices.push(index);
+            } else {
+                right_indices.push(index);
+            }
+        }
 
-        unimplemented!()
+        let left = DataSetSample {
+            dataset: self.dataset,
+            indices: left_indices,
+        };
+        let right = DataSetSample {
+            dataset: self.dataset,
+            indices: right_indices,
+        };
+        Some((fid, threshold, s, left, right))
     }
 }
 
@@ -716,6 +730,21 @@ impl<'a> From<&'a DataSet> for DataSetSample<'a> {
             dataset: dataset,
             indices: indices,
         }
+    }
+}
+
+impl<'a> std::fmt::Display for DataSetSample<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        for &index in self.indices.iter() {
+            write!(
+                f,
+                "{{index: {}, instance: {}}}\n",
+                index,
+                self.dataset[index]
+            )?;
+        }
+
+        Ok(())
     }
 }
 
@@ -801,5 +830,81 @@ mod tests {
         );
 
         assert_eq!(map.map, vec![2, 3, 1, 1, 0, 3, 3, 2, 2]);
+    }
+
+    #[test]
+    fn test_data_set_sample_split() {
+        // (label, qid, feature_values)
+        let data = vec![
+            (3.0, 1, vec![5.0]),
+            (2.0, 1, vec![7.0]),
+            (3.0, 1, vec![3.0]),
+            (1.0, 1, vec![2.0]),
+            (0.0, 1, vec![1.0]),
+            (2.0, 1, vec![8.0]),
+            (4.0, 1, vec![9.0]),
+            (1.0, 1, vec![4.0]),
+            (0.0, 1, vec![6.0]),
+        ];
+
+        let mut dataset: DataSet = data.into_iter().collect();
+        dataset.generate_thresholds(3);
+
+        let sample = DataSetSample::from(&dataset);
+        let (fid, threshold, s, left, right) = sample.split(1).unwrap();
+        assert_eq!(fid, 1);
+        assert_eq!(threshold, 1.0 + 16.0 / 3.0);
+        assert_eq!(s, 32.0);
+        assert_eq!(left.indices, vec![0, 2, 3, 4, 7, 8]);
+        assert_eq!(right.indices, vec![1, 5, 6]);
+    }
+
+    #[test]
+    fn test_data_set_sample_non_split() {
+        // (label, qid, feature_values)
+        let data = vec![
+            (3.0, 1, vec![5.0]), // 0
+            (2.0, 1, vec![7.0]), // 1
+            (3.0, 1, vec![3.0]), // 2
+            (1.0, 1, vec![2.0]), // 3
+            (0.0, 1, vec![1.0]), // 4
+            (2.0, 1, vec![8.0]), // 5
+            (4.0, 1, vec![9.0]), // 6
+            (1.0, 1, vec![4.0]), // 7
+            (0.0, 1, vec![6.0]), // 8
+        ];
+
+        let mut dataset: DataSet = data.into_iter().collect();
+        dataset.generate_thresholds(3);
+
+        // possible splits of feature values:
+        // 1 | 2 3 4 5 6 7 8 9
+        // 1 2 3 | 4 5 6 7 8 9
+        // 1 2 3 4 5 6 | 7 8 9
+        let sample = DataSetSample::from(&dataset);
+        assert!(sample.split(9).is_none());
+        assert!(sample.split(4).is_none());
+        let (fid, threshold, s, left, right) = sample.split(3).unwrap();
+        assert_eq!(fid, 1);
+        assert_eq!(threshold, 1.0 + 16.0 / 3.0);
+        assert_eq!(s, 32.0);
+        assert_eq!(left.indices, vec![0, 2, 3, 4, 7, 8]);
+        assert_eq!(right.indices, vec![1, 5, 6]);
+
+        // (3.0, 1, vec![5.0]), // 0
+        // (3.0, 1, vec![3.0]), // 2
+        // (1.0, 1, vec![2.0]), // 3
+        // (0.0, 1, vec![1.0]), // 4
+        // (1.0, 1, vec![4.0]), // 7
+        // (0.0, 1, vec![6.0]), // 8
+        // possible splits of [0, 2, 3, 4, 7, 8]
+        // 4 | 3 2 7 0 8
+        // 4 3 2 | 7 0 8
+        let (fid, threshold, s, left, right) = left.split(2).unwrap();
+        assert_eq!(fid, 1);
+        assert_eq!(threshold, 1.0 + 8.0 / 3.0);
+        assert_eq!(s, 32.0/3.0);
+        assert_eq!(left.indices, vec![2, 3, 4]);
+        assert_eq!(right.indices, vec![0, 7, 8]);
     }
 }

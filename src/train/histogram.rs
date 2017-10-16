@@ -55,32 +55,13 @@ impl FeatureHistogram {
         FeatureHistogram { bins: bins }
     }
 
-    // Update the values' sum for each bin
-    // pub fn update(&mut self, labels: &[f64]) {
-    //     for bin in self.bins.iter_mut() {
-    //         bin.acc_sum = 0.0;
-    //     }
-
-    //     for (index, &label) in labels.iter().enumerate() {
-    //         let bin_index = self.bin_index_map[index];
-    //         let bin = &mut self.bins[bin_index];
-    //         bin.acc_sum += label;
-    //     }
-
-    //     // Accumulate all the preceding values of each bin.
-    //     let mut acc = 0.0;
-    //     for bin in self.bins.iter_mut() {
-    //         bin.acc_sum += acc;
-    //         acc = bin.acc_sum;
-    //     }
-    // }
-
-    /// Return best (threashold, s value)
-    pub fn best_split(&self, min_leaf: usize) -> Option<(f64, f64)> {
+    /// Return the best splitting point. The returned value is of the
+    /// form (threashold, s value).
+    pub fn best_split(&self, min_leaf: usize) -> Option<(Value, f64)> {
         let sum = self.bins.last().unwrap().acc_sum;
         let count = self.bins.last().unwrap().acc_count;
         let mut split: Option<(f64, f64)> = None;
-        for (index, bin) in self.bins.iter().enumerate() {
+        for bin in self.bins.iter() {
             let count_left = bin.acc_count;
             let count_right = count - count_left;
             if count_left < min_leaf || count_right < min_leaf {
@@ -90,16 +71,16 @@ impl FeatureHistogram {
             let sum_left = bin.acc_sum;
             let sum_right = sum - sum_left;
 
-            let s = sum_left * sum_left / count_left as f64 +
+            let s_value = sum_left * sum_left / count_left as f64 +
                 sum_right * sum_right / count_right as f64;
 
             match split {
                 Some((old_s, _old_threashold)) => {
-                    if s > old_s {
-                        split = Some((bin.threashold, s));
+                    if s_value > old_s {
+                        split = Some((bin.threashold, s_value));
                     }
                 }
-                None => split = Some((bin.threashold, s)),
+                None => split = Some((bin.threashold, s_value)),
             }
         }
 
@@ -202,7 +183,7 @@ mod test {
 
         let sample = DataSetSample::from(&dataset);
 
-        let mut histogram = sample.feature_histogram(1);
+        let histogram = sample.feature_histogram(1);
         assert_eq!(
             histogram.bins,
             vec![
@@ -221,5 +202,4 @@ mod test {
             ]
         );
     }
-
 }

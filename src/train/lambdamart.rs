@@ -54,7 +54,9 @@ impl LambdaMART {
                 &mut weights,
             );
 
-            let tree = RegressionTree::fit(&self.dataset);
+            let min_leaf_count = 1;
+            let mut tree = RegressionTree::new(min_leaf_count);
+            tree.fit(&self.dataset);
         }
         Ok(())
     }
