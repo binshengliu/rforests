@@ -2,7 +2,7 @@ use util::Result;
 use std::fs::File;
 use metric::NDCGScorer;
 use super::regression_tree::RegressionTree;
-use train::dataset::DataSet;
+use train::dataset::*;
 use util::*;
 
 pub struct LambdaMART {
@@ -47,6 +47,7 @@ impl LambdaMART {
         let mut weights: Vec<Value> = Vec::with_capacity(ninstances);
         weights.resize(ninstances, 0.0);
 
+        let training = TrainingSet::from(&self.dataset);
         for i in 0..ntrees {
             self.update_pseudo_response(
                 &model_scores,
@@ -56,7 +57,7 @@ impl LambdaMART {
 
             let min_leaf_count = 1;
             let mut tree = RegressionTree::new(min_leaf_count);
-            tree.fit(&self.dataset);
+            tree.fit(&training);
         }
         Ok(())
     }

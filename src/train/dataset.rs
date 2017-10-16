@@ -548,56 +548,122 @@ impl std::ops::Deref for DataSet {
     }
 }
 
-/// A collection type containing part of a data set.
-pub struct DataSetSample<'a> {
-    /// Original data
+/// A collection type containing a data set. The difference with
+/// DataSet is that this data structure keeps the latest label values
+/// after each training.
+pub struct TrainingSet<'a> {
     dataset: &'a DataSet,
+    labels: Vec<Value>,
+}
 
-    /// Indices into Dataset
+impl<'a> TrainingSet<'a> {
+    /// Returns the number of instances in the training set, also
+    /// referred to as its 'length'.
+    fn len(&self) -> usize {
+        self.labels.len()
+    }
+
+    /// Get (label, instance) at given index.
+    fn get(&self, index: usize) -> (Value, &'a Instance) {
+        (self.labels[index], &self.dataset[index])
+    }
+
+    /// Returns an iterator over the feature ids in the training set.
+    pub fn fid_iter(&self) -> impl Iterator<Item = Id> {
+        self.dataset.fid_iter()
+    }
+
+    /// Returns an iterator over the labels in the data set.
+    pub fn iter(&'a self) -> impl Iterator<Item = (Value, &Instance)> + 'a {
+        self.labels.iter().cloned().zip(self.dataset.iter())
+    }
+
+    /// Returns an iterator over the labels in the data set.
+    pub fn label_iter(&'a self) -> impl Iterator<Item = Value> + 'a {
+        self.labels.iter().cloned()
+    }
+
+    /// Returns the label value at given index.
+    pub fn label(&self, index: usize) -> f64 {
+        self.labels[index]
+    }
+
+    /// Adds to each label.
+    pub fn add(&mut self, delta: &[Value]) {
+        assert_eq!(self.labels.len(), delta.len());
+        for (index, label) in self.labels.iter_mut().enumerate() {
+            *label += delta[index];
+        }
+    }
+
+    /// Generate histogram for the specified instances.
+    pub fn feature_histogram<I: Iterator<Item = Id>>(
+        &self,
+        fid: Id,
+        iter: I,
+    ) -> Histogram {
+        // Get the map by feature id.
+        let iter = iter.map(|id| (id, self.label(id)));
+        self.dataset.feature_histogram(fid, iter)
+    }
+}
+
+impl<'a> From<&'a DataSet> for TrainingSet<'a> {
+    fn from(dataset: &'a DataSet) -> TrainingSet<'a> {
+        let len = dataset.len();
+        let mut labels = Vec::with_capacity(len);
+        labels.resize(len, 0.0);
+        TrainingSet {
+            dataset: dataset,
+            labels: labels,
+        }
+    }
+}
+
+/// A collection type containing part of a data set.
+pub struct TrainingSample<'a> {
+    /// Original data
+    training: &'a TrainingSet<'a>,
+
+    /// Indices into training
     indices: Vec<usize>,
 }
 
-impl<'a> DataSetSample<'a> {
+impl<'a> TrainingSample<'a> {
     /// Returns the number of instances in the data set sample, also
     /// referred to as its 'length'.
     pub fn len(&self) -> usize {
         self.indices.len()
     }
 
-    /// Returns an iterator over the data set sample.
-    pub fn iter(&'a self) -> impl Iterator<Item = &Instance> + 'a {
-        self.indices.iter().map(move |&index| &self.dataset[index])
-    }
-
     /// Creates an iterator which gives the index of the Instance as
     /// well as the Instance.
     ///
-    /// The iterator returned yields pairs (i, instance), where i is
-    /// the index of Instance and instance is the reference to the
-    /// Instance returned by the iterator.
-    pub fn enumerate(
-        &'a self,
-    ) -> impl Iterator<Item = (usize, &Instance)> + 'a {
+    /// The iterator returned yields pairs (index, value, instance),
+    /// where `index` is the index of Instance, `value` is the label
+    /// value, and `instance` is the reference to the Instance.
+    pub fn iter(&'a self) -> impl Iterator<Item = (Id, Value, &Instance)> + 'a {
         self.indices.iter().map(move |&index| {
-            (index, &self.dataset[index])
+            let (label, instance) = self.training.get(index);
+            (index, label, instance)
         })
     }
 
     /// Returns an iterator over the feature ids in the data set
     /// sample.
-    pub fn fid_iter(&self) -> impl Iterator<Item = Id> {
-        self.dataset.fid_iter()
+    pub fn fid_iter(&'a self) -> impl Iterator<Item = Id> + 'a {
+        self.training.fid_iter()
     }
 
     /// Returns an iterator over the labels in the data set sample.
     pub fn label_iter(&'a self) -> impl Iterator<Item = Value> + 'a {
-        self.iter().map(|instance| instance.label)
+        self.iter().map(|(_index, label, _ins)| label)
     }
 
     /// Returns an iterator over the values of the given feature in
     /// the data set sample.
     pub fn value_iter(&'a self, fid: Id) -> impl Iterator<Item = Value> + 'a {
-        self.iter().map(move |instance| instance.value(fid))
+        self.iter().map(move |(_index, _label, ins)| ins.value(fid))
     }
 
     /// Returns the average value of the labels.
@@ -605,36 +671,12 @@ impl<'a> DataSetSample<'a> {
         self.label_iter().sum::<f64>() / (self.len() as f64)
     }
 
-    /// Returns a copy of the data set sample, sorted by the given
-    /// feature.
-    pub fn sorted_by_feature(&self, fid: Id) -> DataSetSample {
-        let indices = self.sorted_indices_by_feature(fid);
-        DataSetSample {
-            dataset: self.dataset,
-            indices: indices,
-        }
-    }
-
-    /// Returns a copy of the data set sample, sorted by the given
-    /// feature.
-    fn sorted_indices_by_feature(&self, fid: Id) -> Vec<usize> {
-        use std::cmp::Ordering::Equal;
-        let mut indices = self.indices.clone();
-        indices.sort_by(|&index1, &index2| {
-            let value1 = self.dataset[index1].value(fid);
-            let value2 = self.dataset[index2].value(fid);
-            value1.partial_cmp(&value2).unwrap_or(Equal)
-        });
-        indices
-    }
-
     /// Returns a histogram of the feature of the data set sample.
     pub fn feature_histogram(&self, fid: Id) -> Histogram {
-        let iter = self.indices.iter().map(|&index| {
-            (index, self.dataset[index].label())
-        });
-
-        self.dataset.feature_histogram(fid, iter)
+        self.training.feature_histogram(
+            fid,
+            self.indices.iter().cloned(),
+        )
     }
 
     /// Split self. Returns (split feature, threshold, s value, left
@@ -642,7 +684,7 @@ impl<'a> DataSetSample<'a> {
     pub fn split(
         &self,
         min_leaf_count: usize,
-    ) -> Option<(Id, Value, f64, DataSetSample, DataSetSample)> {
+    ) -> Option<(Id, Value, f64, TrainingSample, TrainingSample)> {
         assert!(min_leaf_count > 0);
         // (fid, threshold, s)
         let mut splits: Vec<(Id, Value, f64)> = Vec::new();
@@ -665,7 +707,7 @@ impl<'a> DataSetSample<'a> {
 
         let mut left_indices = Vec::new();
         let mut right_indices = Vec::new();
-        for (index, instance) in self.enumerate() {
+        for (index, _label, instance) in self.iter() {
             if instance.value(fid) <= threshold {
                 left_indices.push(index);
             } else {
@@ -673,37 +715,40 @@ impl<'a> DataSetSample<'a> {
             }
         }
 
-        let left = DataSetSample {
-            dataset: self.dataset,
+        let left = TrainingSample {
+            training: self.training,
             indices: left_indices,
         };
-        let right = DataSetSample {
-            dataset: self.dataset,
+        let right = TrainingSample {
+            training: self.training,
             indices: right_indices,
         };
         Some((fid, threshold, s, left, right))
     }
 }
 
-impl<'a> From<&'a DataSet> for DataSetSample<'a> {
-    fn from(dataset: &'a DataSet) -> DataSetSample<'a> {
-        let len = dataset.len();
+impl<'a> From<&'a TrainingSet<'a>> for TrainingSample<'a> {
+    fn from(training: &'a TrainingSet) -> TrainingSample<'a> {
+        let len = training.len();
         let indices: Vec<usize> = (0..len).collect();
-        DataSetSample {
-            dataset: dataset,
+        TrainingSample {
+            training: training,
             indices: indices,
         }
     }
 }
 
-impl<'a> std::fmt::Display for DataSetSample<'a> {
+impl<'a> std::fmt::Display for TrainingSample<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for &index in self.indices.iter() {
+            let (label, instance) = self.training.get(index);
+
             write!(
                 f,
-                "{{index: {}, instance: {}}}\n",
+                "{{index: {}, label: {}, instance: {}}}\n",
                 index,
-                self.dataset[index]
+                label,
+                instance
             )?;
         }
 
@@ -804,7 +849,10 @@ mod tests {
         let mut dataset: DataSet = data.into_iter().collect();
         dataset.generate_thresholds(3);
 
-        let sample = DataSetSample::from(&dataset);
+        let mut training = TrainingSet::from(&dataset);
+        training.add(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
+
+        let sample = TrainingSample::from(&training);
         let (fid, threshold, s, left, right) = sample.split(1).unwrap();
         assert_eq!(fid, 1);
         assert_eq!(threshold, 1.0 + 16.0 / 3.0);
@@ -835,7 +883,10 @@ mod tests {
         // 1 | 2 3 4 5 6 7 8 9
         // 1 2 3 | 4 5 6 7 8 9
         // 1 2 3 4 5 6 | 7 8 9
-        let sample = DataSetSample::from(&dataset);
+        let mut training = TrainingSet::from(&dataset);
+        training.add(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
+
+        let sample = TrainingSample::from(&training);
         assert!(sample.split(9).is_none());
         assert!(sample.split(4).is_none());
         let (fid, threshold, s, left, right) = sample.split(3).unwrap();

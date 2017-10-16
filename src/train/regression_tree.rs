@@ -24,7 +24,7 @@ impl Node {
 
     /// Split on the data set sample and creates children, until self
     /// becomes the leaf node.
-    pub fn split(&mut self, sample: DataSetSample, min_leaf_count: usize) {
+    pub fn split(&mut self, sample: TrainingSample, min_leaf_count: usize) {
         let split_result = sample.split(min_leaf_count);
         if split_result.is_none() {
             self.avg = Some(sample.label_avg());
@@ -77,10 +77,10 @@ impl RegressionTree {
         }
     }
 
-    /// Fit to a dataset.
-    pub fn fit(&mut self, dataset: &DataSet) {
+    /// Fit to a training.
+    pub fn fit(&mut self, training: &TrainingSet) {
         let mut root = Node::new();
-        let sample = DataSetSample::from(dataset);
+        let sample = TrainingSample::from(training);
         root.split(sample, self.min_leaf_count);
     }
 

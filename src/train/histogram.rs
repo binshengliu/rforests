@@ -1,5 +1,4 @@
 use std;
-use train::dataset::*;
 use util::*;
 
 #[derive(PartialEq)]
@@ -126,7 +125,11 @@ mod test {
         let mut dataset: DataSet = data.into_iter().collect();
         dataset.generate_thresholds(3);
 
-        let sample = DataSetSample::from(&dataset);
+        // The label values are zero by default.
+        let mut training = TrainingSet::from(&dataset);
+        training.add(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
+
+        let sample = TrainingSample::from(&training);
 
         let histogram = sample.feature_histogram(1);
         assert_eq!(
