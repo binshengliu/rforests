@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use metric::MetricScorer;
 use train::histogram::*;
-use util::{Result, Id, Value};
+use util::{Id, Result, Value};
 use format::svmlight::*;
 use std;
 use std::cmp::Ordering::*;
@@ -250,7 +250,17 @@ struct ThresholdMap {
     /// value falls into the threshold, use `if value <= threshold`.
     thresholds: Vec<Value>,
 
-    /// The elements in the map is the index into the thresholds Vec.
+    /// The index of the Vec is the index of the instances in the
+    /// DataSet, which also means `map.len() == instances.len()`.
+    ///
+    /// The elements are the indices into the thresholds Vec.
+    ///
+    /// For example, if we have 100,000 instances, and 256 thresholds,
+    /// then
+    /// ```
+    /// assert_eq!(map.len(), 100,000);
+    /// assert!(map.iter().all(|&i| i <= 256));
+    /// ```
     map: Vec<usize>,
 }
 
@@ -267,7 +277,8 @@ impl ThresholdMap {
             let max = *thresholds.last().unwrap();
             let min = *thresholds.first().unwrap();
             let step = (max - min) / max_bins as Value;
-            thresholds = (0..max_bins).map(|n| min + n as Value * step).collect();
+            thresholds =
+                (0..max_bins).map(|n| min + n as Value * step).collect();
         }
         thresholds.push(std::f64::MAX);
         thresholds
@@ -306,6 +317,46 @@ impl ThresholdMap {
             map: map,
         }
     }
+
+    /// Generate a histogram for a series of values.
+    ///
+    /// The input is an iterator over (instance id, feature value,
+    /// label value).
+    ///
+    /// There are two
+    /// cases when we need to regenerate the histogram. First, after
+    /// each iteration of learning, the label values are
+    /// different. But this is a situation that we can update the
+    /// histogram instead of constructing from scratch. Second, after
+    /// a tree node is splited, each sub-node contains different part
+    /// of data.
+    pub fn histogram<I: Iterator<Item = (Id, Value, Value)>>(
+        &self,
+        iter: I,
+    ) -> FeatureHistogram {
+        // (threshold value, count, sum)
+        let mut hist: Vec<(Value, usize, Value)> = self.thresholds
+            .iter()
+            .map(|&threshold| (threshold, 0, 0.0))
+            .collect();
+
+        for (id, feature_value, label) in iter {
+            let threshold_index = self.map[id];
+
+            let threshold = self.thresholds[threshold_index];
+            assert!(feature_value <= threshold);
+
+            hist[threshold_index].1 += 1;
+            hist[threshold_index].2 += label;
+        }
+
+        for i in 1..hist.len() {
+            hist[i].1 += hist[i - 1].1;
+            hist[i].2 += hist[i - 1].2;
+        }
+        let feature_histogram = hist.into_iter().collect();
+        feature_histogram
+    }
 }
 
 impl std::fmt::Debug for ThresholdMap {
@@ -336,22 +387,30 @@ pub struct DataSet {
 }
 
 impl DataSet {
-    /// Create a DataSet.
-    fn new(nfeatures: usize, instances: Vec<Instance>) -> DataSet {
-        let mut threshold_maps = Vec::new();
-        for fid in 1..(nfeatures + 1) {
-            let values: Vec<Value> = instances
-                .iter()
-                .map(|instance| instance.value(fid))
-                .collect();
-            let map = ThresholdMap::new(values, 256);
-            threshold_maps.push(map);
-        }
+    const MAX_BINS_COUNT: usize = 256;
 
+    /// Create an empty DataSet.
+    pub fn new(instances: Vec<Instance>, nfeatures: usize) -> DataSet {
         DataSet {
             nfeatures: nfeatures,
             instances: instances,
-            threshold_maps: threshold_maps,
+            threshold_maps: Vec::new(),
+        }
+    }
+
+    /// Generate thresholds. This interface is ugly. It introduces
+    /// extra dependency that functions must be called in a specific
+    /// order. But I haven't come up with a good workaround to support
+    /// FromIterator. Basically, this is a issue how we customize the
+    /// grouping of the data.
+    pub fn generate_thresholds(&mut self, max_bin: usize) {
+        for fid in self.fid_iter() {
+            let values: Vec<Value> = self.instances
+                .iter()
+                .map(|instance| instance.value(fid))
+                .collect();
+            let map = ThresholdMap::new(values, max_bin);
+            self.threshold_maps.push(map);
         }
     }
 
@@ -360,18 +419,17 @@ impl DataSet {
     where
         R: ::std::io::Read,
     {
+        let mut instances = Vec::new();
         let mut nfeatures = 0;
-        let instances: Vec<Instance> = SvmLightFile::instances(reader)
-            .map(|instance| if let Ok(instance) = instance {
-                nfeatures =
-                    usize::max(nfeatures, instance.max_feature_id() as usize);
-                return Ok(instance);
-            } else {
-                instance
-            })
-            .collect::<Result<Vec<Instance>>>()?;
+        for instance_result in SvmLightFile::instances(reader)
+        {
+            let instance = instance_result?;
+            nfeatures =
+                usize::max(nfeatures, instance.max_feature_id() as usize);
+            instances.push(instance);
+        }
 
-        Ok(DataSet::new(nfeatures, instances))
+        Ok(DataSet::new(instances, nfeatures))
     }
 
     /// Returns the number of instances in the data set, also referred
@@ -480,18 +538,19 @@ impl DataSet {
             .collect()
     }
 
-    // pub fn feature_histogram(
-    //     &self,
-    //     fid: Id,
-    //     max_bins: usize,
-    // ) -> FeatureHistogram {
-    //     let indices = self.feature_sorted_indices(fid);
-    //     let values: Vec<(usize, Value, Value)> = indices
-    //         .into_iter()
-    //         .map(|index| (index, self[index].label(), self[index].value(fid)))
-    //         .collect();
-    //     FeatureHistogram::new(&values, max_bins)
-    // }
+    /// Generate histogram for the specified instances.
+    pub fn feature_histogram(
+        &self,
+        fid: Id,
+        instance_ids: &Vec<Id>,
+    ) -> FeatureHistogram {
+        // Get the map by feature id.
+        let threshold_map = &self.threshold_maps[fid - 1];
+        let iter = instance_ids.iter().map(|&id| {
+            (id, self.instances[id].value(fid), self.instances[id].label)
+        });
+        threshold_map.histogram(iter)
+    }
 }
 
 use std::iter::FromIterator;
@@ -509,7 +568,7 @@ impl FromIterator<(Value, Id, Vec<Value>)> for DataSet {
             instances.push(instance);
         }
 
-        DataSet::new(nfeatures, instances)
+        DataSet::new(instances, nfeatures)
     }
 }
 
@@ -597,14 +656,8 @@ impl<'a> DataSetSample<'a> {
     }
 
     /// Returns a histogram of the feature of the data set sample.
-    pub fn feature_histogram(
-        &self,
-        fid: Id,
-        max_bins: usize,
-    ) -> FeatureHistogram {
-        let sorted = self.sorted_by_feature(fid);
-
-        FeatureHistogram::new(&sorted, fid, max_bins)
+    pub fn feature_histogram(&self, fid: Id) -> FeatureHistogram {
+        self.dataset.feature_histogram(fid, &self.indices)
     }
 
     /// Returns histograms of all the features of the data set sample.
@@ -617,7 +670,7 @@ impl<'a> DataSetSample<'a> {
         let mut splits: Vec<(Id, Value, Value, DataSetSample)> = Vec::new();
         for fid in self.fid_iter() {
             let sorted: DataSetSample = self.sorted_by_feature(fid);
-            let feature_histogram = FeatureHistogram::new(&sorted, fid, 256);
+            let feature_histogram = self.feature_histogram(fid);
             let split = feature_histogram.best_split(1);
             if split.is_none() {
                 continue;
