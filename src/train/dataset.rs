@@ -903,7 +903,7 @@ mod tests {
         let (fid, threshold, s, left, right) = left.split(2).unwrap();
         assert_eq!(fid, 1);
         assert_eq!(threshold, 1.0 + 8.0 / 3.0);
-        assert_eq!(s, 32.0/3.0);
+        assert_eq!(s, 32.0 / 3.0);
         assert_eq!(left.indices, vec![2, 3, 4]);
         assert_eq!(right.indices, vec![0, 7, 8]);
     }
