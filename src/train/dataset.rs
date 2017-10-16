@@ -30,9 +30,9 @@ impl Instance {
     // See https://github.com/rust-lang/rust/issues/38615 for the
     // reason that 'a is required.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, f64)> + 'a {
-        self.values.iter().enumerate().skip(1).map(
+        self.values.iter().enumerate().map(
             |(index, &value)| {
-                (index, value)
+                (index + 1, value)
             },
         )
     }
@@ -43,7 +43,7 @@ impl Instance {
     }
 
     pub fn max_feature_id(&self) -> u64 {
-        (self.values.len() + 1) as u64
+        self.values.len() as u64
     }
 
     pub fn label(&self) -> f64 {
@@ -642,6 +642,43 @@ impl<'a> From<&'a DataSet> for DataSetSample<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_instance_interface() {
+        let label = 3.0;
+        let qid = 3333;
+        let values = vec![1.0, 2.0, 3.0];
+        let instance = Instance::new(label, qid, values);
+
+        // values()
+        let mut iter = instance.values();
+        assert_eq!(iter.next(), Some(1.0));
+        assert_eq!(iter.next(), Some(2.0));
+        assert_eq!(iter.next(), Some(3.0));
+        assert_eq!(iter.next(), None);
+
+        // iter()
+        let mut iter = instance.iter();
+        assert_eq!(iter.next(), Some((1, 1.0)));
+        assert_eq!(iter.next(), Some((2, 2.0)));
+        assert_eq!(iter.next(), Some((3, 3.0)));
+        assert_eq!(iter.next(), None);
+
+        // value()
+        assert_eq!(instance.value(1), 1.0);
+        assert_eq!(instance.value(2), 2.0);
+        assert_eq!(instance.value(3), 3.0);
+        assert_eq!(instance.value(4), 0.0);
+
+        // max_feature_id()
+        assert_eq!(instance.max_feature_id(), 3);
+
+        // label()
+        assert_eq!(instance.label(), 3.0);
+
+        // qid()
+        assert_eq!(instance.qid(), 3333);
+    }
 
     #[test]
     fn test_sorted_feature() {
