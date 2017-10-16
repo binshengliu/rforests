@@ -104,61 +104,6 @@ impl FromIterator<(Value, usize, Value)> for FeatureHistogram {
     }
 }
 
-pub struct Histogram {
-    /// Histogram for each feature
-    hists: Vec<FeatureHistogram>,
-
-    /// Sum of labels
-    label_sum: f64,
-
-    /// Sum of squared labels
-    label_sq_sum: f64,
-}
-
-impl Histogram {
-    pub fn new(dataset: &DataSetSample, max_bins: usize) -> Histogram {
-        // Sum of labels and sum of squared labels.
-        let (sum, sq_sum) = dataset.label_iter().fold(
-            (0.0, 0.0),
-            |(sum, sq_sum), label| {
-                (sum + label, sq_sum + label * label)
-            },
-        );
-        let mut hists: Vec<FeatureHistogram> = Vec::new();
-        for fid in dataset.fid_iter() {
-            let feature_hist = dataset.feature_histogram(fid);
-            hists.push(feature_hist);
-        }
-
-        Histogram {
-            hists: hists,
-            label_sum: sum,
-            label_sq_sum: sq_sum,
-        }
-    }
-
-    pub fn update(&mut self, labels: &[f64]) {
-        for hist in self.hists.iter_mut() {
-            // hist.update(labels);
-        }
-
-        let (sum, sq_sum) =
-            labels.iter().fold((0.0, 0.0), |(sum, sq_sum), label| {
-                (sum + label, sq_sum + label * label)
-            });
-        self.label_sum = sum;
-        self.label_sq_sum = sq_sum;
-    }
-}
-
-impl std::ops::Deref for Histogram {
-    type Target = Vec<FeatureHistogram>;
-
-    fn deref(&self) -> &Vec<FeatureHistogram> {
-        &self.hists
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;

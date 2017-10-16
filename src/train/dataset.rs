@@ -669,11 +669,6 @@ impl<'a> DataSetSample<'a> {
         self.dataset.feature_histogram(fid, iter)
     }
 
-    /// Returns histograms of all the features of the data set sample.
-    fn histogram(&self, max_bins: usize) -> Histogram {
-        Histogram::new(self, max_bins)
-    }
-
     /// Split self. Returns (split feature, threshold, s value, left
     /// child, right child).
     pub fn split(
