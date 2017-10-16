@@ -493,16 +493,6 @@ impl DataSet {
         queries
     }
 
-    /// Returns an iterator over the instances sorted on the given
-    /// feature.
-    pub fn instance_sorted_by_feature<'a>(
-        &'a self,
-        fid: Id,
-    ) -> impl Iterator<Item = &Instance> + 'a {
-        let indices = self.feature_sorted_indices(fid);
-        indices.into_iter().map(move |index| &self[index])
-    }
-
     /// Returns a Vec of the indices, sorted on the given feature.
     pub fn feature_sorted_indices(&self, fid: Id) -> Vec<usize> {
         use std::cmp::Ordering;
@@ -515,28 +505,6 @@ impl DataSet {
             value1.partial_cmp(&value2).unwrap_or(Ordering::Equal)
         });
         indices
-    }
-
-    /// Return sorted values of a specific feature.
-    pub fn feature_sorted_values(&self, fid: Id) -> Vec<Value> {
-        let indices = self.feature_sorted_indices(fid);
-        indices
-            .into_iter()
-            .map(|index| self[index].value(fid))
-            .collect()
-    }
-
-    /// Return sorted values of a specific feature, with the original
-    /// indices in the dataset.
-    pub fn feature_sorted_values_with_indices(
-        &self,
-        fid: Id,
-    ) -> Vec<(usize, Value)> {
-        let indices = self.feature_sorted_indices(fid);
-        indices
-            .into_iter()
-            .map(|index| (index, self[index].value(fid)))
-            .collect()
     }
 
     /// Generate histogram for the specified instances.
@@ -797,15 +765,6 @@ mod tests {
 
         let sorted_indices = dataset.feature_sorted_indices(3);
         assert_eq!(sorted_indices, vec![0, 2, 1]);
-    }
-
-    #[test]
-    fn test_feature_sorted_values() {
-        let s = "0 qid:1 1:3.0 2:0.0 3:1.0\n2 qid:2 1:1.0 2:1.0 3:3.0\n0 qid:3 1:0.0 2:2.0 3:2.0";
-        let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
-
-        let sorted_indices = dataset.feature_sorted_values(1);
-        assert_eq!(sorted_indices, vec![0.0, 1.0, 3.0]);
     }
 
     #[test]
