@@ -421,8 +421,7 @@ impl DataSet {
     {
         let mut instances = Vec::new();
         let mut nfeatures = 0;
-        for instance_result in SvmLightFile::instances(reader)
-        {
+        for instance_result in SvmLightFile::instances(reader) {
             let instance = instance_result?;
             nfeatures =
                 usize::max(nfeatures, instance.max_feature_id() as usize);
@@ -539,16 +538,15 @@ impl DataSet {
     }
 
     /// Generate histogram for the specified instances.
-    pub fn feature_histogram(
+    pub fn feature_histogram<I: Iterator<Item = (Id, Value)>>(
         &self,
         fid: Id,
-        instance_ids: &Vec<Id>,
+        iter: I,
     ) -> FeatureHistogram {
         // Get the map by feature id.
         let threshold_map = &self.threshold_maps[fid - 1];
-        let iter = instance_ids.iter().map(|&id| {
-            (id, self.instances[id].value(fid), self.instances[id].label)
-        });
+        let iter =
+            iter.map(|(id, label)| (id, self.instances[id].value(fid), label));
         threshold_map.histogram(iter)
     }
 }
@@ -657,7 +655,11 @@ impl<'a> DataSetSample<'a> {
 
     /// Returns a histogram of the feature of the data set sample.
     pub fn feature_histogram(&self, fid: Id) -> FeatureHistogram {
-        self.dataset.feature_histogram(fid, &self.indices)
+        let iter = self.indices.iter().map(|&index| {
+            (index, self.dataset[index].label())
+        });
+
+        self.dataset.feature_histogram(fid, iter)
     }
 
     /// Returns histograms of all the features of the data set sample.
