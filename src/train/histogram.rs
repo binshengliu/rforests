@@ -1,5 +1,6 @@
 use std;
 use train::dataset::*;
+use util::*;
 
 #[derive(PartialEq)]
 struct HistogramBin {
@@ -56,7 +57,7 @@ impl FeatureHistogram {
     /// Generate threasholds vec from values and max bins.
     fn threasholds(
         sample: &DataSetSample,
-        fid: u64,
+        fid: Id,
         max_bins: usize,
     ) -> Vec<f64> {
         let mut threasholds: Vec<f64> =
@@ -81,7 +82,7 @@ impl FeatureHistogram {
     /// sorted on `fid`.
     pub fn new(
         sorted_sample: &DataSetSample,
-        fid: u64,
+        fid: Id,
         max_bins: usize,
     ) -> FeatureHistogram {
         let nvalues = sorted_sample.len();

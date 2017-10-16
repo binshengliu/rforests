@@ -1,12 +1,13 @@
 use train::dataset::DataSet;
+use util::*;
 
 pub struct Node {
-    fid: u64,
-    threashold: f64,
+    fid: Id,
+    threashold: Value,
 }
 
 impl Node {
-    pub fn new(fid: u64, threashold: f64) -> Node {
+    pub fn new(fid: Id, threashold: Value) -> Node {
         Node {
             fid: fid,
             threashold: threashold,
@@ -34,8 +35,8 @@ impl RegressionTree {
 
     pub fn feature_best_split(
         dataset: &DataSet,
-        fid: u64,
-        threasholds: &[f64],
+        fid: Id,
+        threasholds: &[Value],
     ) {
         // let histogram = dataset.feature_histogram(fid, 10);
     }

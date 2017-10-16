@@ -2,7 +2,7 @@ use std;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
-use util::Result;
+use util::*;
 use train::dataset::*;
 
 // Format of the example file. http://svmlight.joachims.org/
@@ -139,7 +139,7 @@ impl FilesStats {
         self.feature_stats().map(FeatureScale::from).collect()
     }
 
-    fn update(&mut self, feature_id: usize, value: f64) {
+    fn update(&mut self, feature_id: Id, value: Value) {
         // feature_id-1 is used as vec index
         if feature_id > self.feature_stats.len() {
             self.feature_stats.resize(
@@ -192,7 +192,7 @@ impl SvmLightFile {
     /// each line.
     pub fn parse_reader<R>(
         reader: R,
-    ) -> impl Iterator<Item = Result<(f64, u64, Vec<f64>)>>
+    ) -> impl Iterator<Item = Result<(Value, Id, Vec<Value>)>>
     where
         R: std::io::Read,
     {
@@ -234,13 +234,13 @@ impl SvmLightFile {
     }
 
     /// Parse "3".
-    fn parse_label(label: &str) -> Result<f64> {
-        let label = label.parse::<f64>()?;
+    fn parse_label(label: &str) -> Result<Value> {
+        let label = label.parse::<Value>()?;
         Ok(label)
     }
 
     /// Parse "qid:3333".
-    fn parse_qid(qid: &str) -> Result<u64> {
+    fn parse_qid(qid: &str) -> Result<Id> {
         let v: Vec<&str> = qid.split(':').collect();
         if v.len() != 2 {
             Err(format!("Invalid qid field: {}", qid))?;
@@ -250,7 +250,7 @@ impl SvmLightFile {
             Err(format!("Invalid qid field: {}", v[0]))?;
         }
 
-        let qid = v[1].parse::<u64>()?;
+        let qid = v[1].parse::<Id>()?;
 
         Ok(qid)
     }
@@ -259,24 +259,24 @@ impl SvmLightFile {
     /// are filled with 0.0. The example above would result vec![0.0,
     /// 3.0, 0.0, 4.0].
     fn parse_values(fields: &[&str]) -> Result<Vec<f64>> {
-        fn parse(s: &str) -> Result<(u64, f64)> {
+        fn parse(s: &str) -> Result<(Id, Value)> {
             let v: Vec<&str> = s.split(':').collect();
             if v.len() != 2 {
                 Err(format!("Invalid string: {}", s))?;
             }
 
-            let id = v[0].parse::<u64>()?;
-            let value = v[1].parse::<f64>()?;
+            let id = v[0].parse::<Id>()?;
+            let value = v[1].parse::<Value>()?;
 
             Ok((id, value))
         }
 
         // (id, value) pairs
-        let v: Vec<(u64, f64)> =
+        let v: Vec<(Id, Value)> =
             fields.iter().map(|&s| parse(s)).collect::<Result<_>>()?;
         let max_id = v.iter().max_by_key(|e| e.0).unwrap().0;
-        let mut ret: Vec<f64> = Vec::with_capacity(max_id as usize + 1);
-        ret.resize(max_id as usize, 0.0);
+        let mut ret: Vec<f64> = Vec::with_capacity(max_id + 1);
+        ret.resize(max_id, 0.0);
         for &(id, value) in v.iter() {
             ret[(id - 1) as usize] = value;
         }
@@ -285,7 +285,7 @@ impl SvmLightFile {
     }
 
     /// Parse "3.0 qid:3864 1:3.000000 2:9.000000 4:3.0 # 3:10.0".
-    pub fn parse_str(s: &str) -> Result<(f64, u64, Vec<f64>)> {
+    pub fn parse_str(s: &str) -> Result<(Value, Id, Vec<Value>)> {
         let line: &str = s.trim().split('#').next().unwrap().trim();
         let fields: Vec<&str> = line.split_whitespace().collect();
         if fields.len() < 2 {
@@ -294,7 +294,7 @@ impl SvmLightFile {
 
         let label = SvmLightFile::parse_label(fields[0])?;
         let qid = SvmLightFile::parse_qid(fields[1])?;
-        let values: Vec<f64> = SvmLightFile::parse_values(&fields[2..])?;
+        let values: Vec<Value> = SvmLightFile::parse_values(&fields[2..])?;
 
         Ok((label, qid, values))
     }

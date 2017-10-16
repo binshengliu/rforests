@@ -1,23 +1,22 @@
 use std::collections::HashMap;
 use metric::MetricScorer;
 use train::histogram::*;
-use util::Result;
+use util::{Result, Id, Value};
 use format::svmlight::*;
 use std;
 use std::cmp::Ordering::*;
 
-
 /// An instance of a label, a qid, and a group of feature values.
 #[derive(Debug, PartialEq)]
 pub struct Instance {
-    qid: u64,
-    label: f64, // or label
-    values: Vec<f64>, // index from 0
+    qid: Id,
+    label: Value, // or label
+    values: Vec<Value>, // index from 0
 }
 
 impl Instance {
     /// Creates a new instance.
-    pub fn new(label: f64, qid: u64, values: Vec<f64>) -> Instance {
+    pub fn new(label: Value, qid: Id, values: Vec<Value>) -> Instance {
         Instance {
             label: label,
             qid: qid,
@@ -26,42 +25,42 @@ impl Instance {
     }
 
     /// Returns an iterator over the feature values of the instance.
-    pub fn values<'a>(&'a self) -> impl Iterator<Item = f64> + 'a {
+    pub fn values<'a>(&'a self) -> impl Iterator<Item = Value> + 'a {
         self.values.iter().cloned()
     }
 
     // See https://github.com/rust-lang/rust/issues/38615 for the
     // reason that 'a is required.
     /// Returns an iterator over the (feature id, value) pairs.
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, f64)> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Id, Value)> + 'a {
         self.values.iter().enumerate().map(|(index, &value)| {
             (index + 1, value)
         })
     }
 
-    pub fn value(&self, id: u64) -> f64 {
-        self.values.get((id - 1) as usize).map_or(0.0, |v| *v)
     /// Returns the value of the given feature id.
+    pub fn value(&self, id: Id) -> Value {
+        self.values.get(id - 1).map_or(0.0, |v| *v)
     }
 
     /// Returns the max feature id.
-    pub fn max_feature_id(&self) -> u64 {
-        self.values.len() as u64
+    pub fn max_feature_id(&self) -> Id {
+        self.values.len() as Id
     }
 
     /// Returns the label of the instance.
-    pub fn label(&self) -> f64 {
+    pub fn label(&self) -> Value {
         self.label
     }
 
     /// Returns the qid of the instance.
-    pub fn qid(&self) -> u64 {
+    pub fn qid(&self) -> Id {
         self.qid
     }
 }
 
-impl From<(f64, u64, Vec<f64>)> for Instance {
-    fn from((label, qid, values): (f64, u64, Vec<f64>)) -> Instance {
+impl From<(Value, Id, Vec<Value>)> for Instance {
+    fn from((label, qid, values): (Value, Id, Vec<Value>)) -> Instance {
         Instance::new(label, qid, values)
     }
 }
@@ -81,9 +80,9 @@ impl std::fmt::Display for Instance {
 }
 
 impl std::ops::Deref for Instance {
-    type Target = Vec<f64>;
+    type Target = Vec<Value>;
 
-    fn deref(&self) -> &Vec<f64> {
+    fn deref(&self) -> &Vec<Value> {
         &self.values
     }
 }
@@ -93,7 +92,7 @@ pub struct Query<'a> {
     dataset: &'a DataSet,
 
     // qid of this Query
-    qid: u64,
+    qid: Id,
 
     // beginning index in DataSet
     start: usize,
@@ -103,8 +102,9 @@ pub struct Query<'a> {
 }
 
 impl<'a> Query<'a> {
+    /// Create a new Query.
     pub fn new(
-        qid: u64,
+        qid: Id,
         dataset: &'a DataSet,
         start: usize,
         len: usize,
@@ -117,15 +117,17 @@ impl<'a> Query<'a> {
         }
     }
 
-    pub fn qid(&self) -> u64 {
+    /// Create the qid of the Query.
+    pub fn qid(&self) -> Id {
         self.qid
     }
 
+    /// Returns an iterator over the `Instance`s of the Query.
     pub fn iter(&'a self) -> impl Iterator<Item = &'a Instance> {
         self.dataset[self.start..(self.start + self.len)].iter()
     }
 
-    /// Return Vec of &Instances sorted by the original labels.
+    /// Returns Vec of &Instances sorted by the labels.
     pub fn sorted_by_labels(&self) -> Vec<&Instance> {
         use std::cmp::Ordering;
 
@@ -145,10 +147,10 @@ impl<'a> Query<'a> {
             .collect()
     }
 
-    /// Return Vec of &Instances sorted by the model scores.
+    /// Returns Vec of &Instances sorted by the model scores.
     pub fn sorted_by_model_scores(
         &self,
-        model_scores: &Vec<f64>,
+        model_scores: &Vec<Value>,
     ) -> Vec<&Instance> {
         use std::cmp::Ordering;
 
@@ -168,11 +170,12 @@ impl<'a> Query<'a> {
             .collect()
     }
 
+    /// Compute the lambda value of this Query.
     pub fn get_lambda<S>(
         &self,
-        model_scores: &Vec<f64>,
+        model_scores: &Vec<Value>,
         metric: &S,
-    ) -> Vec<(usize, f64, f64)>
+    ) -> Vec<(usize, Value, Value)>
     where
         S: MetricScorer,
     {
@@ -190,14 +193,14 @@ impl<'a> Query<'a> {
             label2.partial_cmp(&label1).unwrap_or(Ordering::Equal)
         });
 
-        let labels_sorted_by_scores: Vec<f64> = indices
+        let labels_sorted_by_scores: Vec<Value> = indices
             .iter()
             .map(|&index| self.dataset[index].label())
             .collect();
         let metric_delta = metric.delta(&labels_sorted_by_scores);
 
         // hashmap: index -> (lambda, weight)
-        let mut result: HashMap<usize, (f64, f64)> = HashMap::new();
+        let mut result: HashMap<usize, (Value, Value)> = HashMap::new();
         for &index1 in indices.iter() {
             let instance1 = &self.dataset[index1];
             for &index2 in indices.iter() {
@@ -241,29 +244,29 @@ impl<'a> std::fmt::Display for Query<'a> {
 }
 
 struct ThresholdMap {
-    thresholds: Vec<f64>,
+    thresholds: Vec<Value>,
     map: Vec<usize>,
 }
 
 impl ThresholdMap {
-    fn thresholds(sorted_values: Vec<f64>, max_bins: usize) -> Vec<f64> {
+    fn thresholds(sorted_values: Vec<Value>, max_bins: usize) -> Vec<Value> {
         let mut thresholds = sorted_values;
 
         // If too many values, generate at most max_bins thresholds.
         if thresholds.len() > max_bins {
             let max = *thresholds.last().unwrap();
             let min = *thresholds.first().unwrap();
-            let step = (max - min) / max_bins as f64;
-            thresholds = (0..max_bins).map(|n| min + n as f64 * step).collect();
+            let step = (max - min) / max_bins as Value;
+            thresholds = (0..max_bins).map(|n| min + n as Value * step).collect();
         }
         thresholds.push(std::f64::MAX);
         thresholds
     }
 
-    pub fn new(values: Vec<f64>, max_bins: usize) -> ThresholdMap {
+    pub fn new(values: Vec<Value>, max_bins: usize) -> ThresholdMap {
         let nvalues = values.len();
 
-        let mut indexed_values: Vec<(usize, f64)> =
+        let mut indexed_values: Vec<(usize, Value)> =
             values.iter().cloned().enumerate().collect();
         indexed_values.sort_by(|&(_, a), &(_, b)| {
             a.partial_cmp(&b).unwrap_or(Less)
@@ -272,7 +275,7 @@ impl ThresholdMap {
         let sorted_values = indexed_values
             .iter()
             .map(|&(_, value)| value)
-            .collect::<Vec<f64>>();
+            .collect::<Vec<Value>>();
         let thresholds = ThresholdMap::thresholds(sorted_values, max_bins);
         let mut map: Vec<usize> = Vec::new();
         map.resize(nvalues, 0);
@@ -302,7 +305,7 @@ impl std::fmt::Debug for ThresholdMap {
             self.thresholds
                 .iter()
                 .map(|&threshold| if threshold == std::f64::MAX {
-                    "f64::MAX".to_string()
+                    "Value::MAX".to_string()
                 } else {
                     threshold.to_string()
                 })
@@ -325,9 +328,9 @@ impl DataSet {
     fn new(nfeatures: usize, instances: Vec<Instance>) -> DataSet {
         let mut threshold_maps = Vec::new();
         for fid in 1..(nfeatures + 1) {
-            let values: Vec<f64> = instances
+            let values: Vec<Value> = instances
                 .iter()
-                .map(|instance| instance.value(fid as u64))
+                .map(|instance| instance.value(fid))
                 .collect();
             let map = ThresholdMap::new(values, 256);
             threshold_maps.push(map);
@@ -366,19 +369,19 @@ impl DataSet {
     }
 
     /// Returns an iterator over the feature ids in the data set.
-    pub fn fid_iter(&self) -> impl Iterator<Item = u64> {
-        (1..(self.nfeatures + 1)).map(|i| i as u64)
+    pub fn fid_iter(&self) -> impl Iterator<Item = Id> {
+        (1..(self.nfeatures + 1)).map(|i| i)
     }
 
     /// Returns an iterator over the labels in the data set.
-    pub fn label_iter<'a>(&'a self) -> impl Iterator<Item = f64> + 'a {
+    pub fn label_iter<'a>(&'a self) -> impl Iterator<Item = Value> + 'a {
         self.instances.iter().map(|instance| instance.label)
     }
 
     /// Generate a vector of Query. Each Query keeps indices into the
     /// DataSet.
     pub fn group_by_queries<'a>(&'a self) -> Vec<Query<'a>> {
-        let mut queries: HashMap<u64, Query> = HashMap::new();
+        let mut queries: HashMap<Id, Query> = HashMap::new();
 
         let mut prev_qid = None;
         let mut start = 0;
@@ -421,13 +424,13 @@ impl DataSet {
 
     pub fn instance_sorted_by_feature<'a>(
         &'a self,
-        fid: u64,
+        fid: Id,
     ) -> impl Iterator<Item = &Instance> + 'a {
         let indices = self.feature_sorted_indices(fid);
         indices.into_iter().map(move |index| &self[index])
     }
 
-    pub fn feature_sorted_indices(&self, fid: u64) -> Vec<usize> {
+    pub fn feature_sorted_indices(&self, fid: Id) -> Vec<usize> {
         use std::cmp::Ordering;
 
         let n_instances = self.len();
@@ -441,7 +444,7 @@ impl DataSet {
     }
 
     /// Return sorted values of a specific feature.
-    pub fn feature_sorted_values(&self, fid: u64) -> Vec<f64> {
+    pub fn feature_sorted_values(&self, fid: Id) -> Vec<Value> {
         let indices = self.feature_sorted_indices(fid);
         indices
             .into_iter()
@@ -453,8 +456,8 @@ impl DataSet {
     /// indices in the dataset.
     pub fn feature_sorted_values_with_indices(
         &self,
-        fid: u64,
-    ) -> Vec<(usize, f64)> {
+        fid: Id,
+    ) -> Vec<(usize, Value)> {
         let indices = self.feature_sorted_indices(fid);
         indices
             .into_iter()
@@ -464,11 +467,11 @@ impl DataSet {
 
     // pub fn feature_histogram(
     //     &self,
-    //     fid: u64,
+    //     fid: Id,
     //     max_bins: usize,
     // ) -> FeatureHistogram {
     //     let indices = self.feature_sorted_indices(fid);
-    //     let values: Vec<(usize, f64, f64)> = indices
+    //     let values: Vec<(usize, Value, Value)> = indices
     //         .into_iter()
     //         .map(|index| (index, self[index].label(), self[index].value(fid)))
     //         .collect();
@@ -477,16 +480,17 @@ impl DataSet {
 }
 
 use std::iter::FromIterator;
-impl FromIterator<(f64, u64, Vec<f64>)> for DataSet {
+impl FromIterator<(Value, Id, Vec<Value>)> for DataSet {
     fn from_iter<T>(iter: T) -> DataSet
     where
-        T: IntoIterator<Item = (f64, u64, Vec<f64>)>,
+        T: IntoIterator<Item = (Value, Id, Vec<Value>)>,
     {
         let mut instances = Vec::new();
         let mut nfeatures = 0;
         for (label, qid, values) in iter {
             let instance = Instance::from((label, qid, values));
-            nfeatures = usize::max(nfeatures, instance.max_feature_id() as usize);
+            nfeatures =
+                usize::max(nfeatures, instance.max_feature_id() as usize);
             instances.push(instance);
         }
 
@@ -539,24 +543,24 @@ impl<'a> DataSetSample<'a> {
 
     /// Returns an iterator over the feature ids in the data set
     /// sample.
-    pub fn fid_iter(&self) -> impl Iterator<Item = u64> {
+    pub fn fid_iter(&self) -> impl Iterator<Item = Id> {
         self.dataset.fid_iter()
     }
 
     /// Returns an iterator over the labels in the data set sample.
-    pub fn label_iter(&'a self) -> impl Iterator<Item = f64> + 'a {
+    pub fn label_iter(&'a self) -> impl Iterator<Item = Value> + 'a {
         self.iter().map(|instance| instance.label)
     }
 
     /// Returns an iterator over the values of the given feature in
     /// the data set sample.
-    pub fn value_iter(&'a self, fid: u64) -> impl Iterator<Item = f64> + 'a {
+    pub fn value_iter(&'a self, fid: Id) -> impl Iterator<Item = Value> + 'a {
         self.iter().map(move |instance| instance.value(fid))
     }
 
     /// Returns a copy of the data set sample, sorted by the given
     /// feature.
-    pub fn sorted_by_feature(&self, fid: u64) -> DataSetSample {
+    pub fn sorted_by_feature(&self, fid: Id) -> DataSetSample {
         let indices = self.sorted_indices_by_feature(fid);
         DataSetSample {
             dataset: self.dataset,
@@ -566,7 +570,7 @@ impl<'a> DataSetSample<'a> {
 
     /// Returns a copy of the data set sample, sorted by the given
     /// feature.
-    fn sorted_indices_by_feature(&self, fid: u64) -> Vec<usize> {
+    fn sorted_indices_by_feature(&self, fid: Id) -> Vec<usize> {
         use std::cmp::Ordering::Equal;
         let mut indices = self.indices.clone();
         indices.sort_by(|&index1, &index2| {
@@ -580,7 +584,7 @@ impl<'a> DataSetSample<'a> {
     /// Returns a histogram of the feature of the data set sample.
     pub fn feature_histogram(
         &self,
-        fid: u64,
+        fid: Id,
         max_bins: usize,
     ) -> FeatureHistogram {
         let sorted = self.sorted_by_feature(fid);
@@ -595,7 +599,7 @@ impl<'a> DataSetSample<'a> {
 
     pub fn split(&self) -> Option<(DataSetSample, DataSetSample)> {
         // (fid, threashold, s, sorted data)
-        let mut splits: Vec<(u64, f64, f64, DataSetSample)> = Vec::new();
+        let mut splits: Vec<(Id, Value, Value, DataSetSample)> = Vec::new();
         for fid in self.fid_iter() {
             let sorted: DataSetSample = self.sorted_by_feature(fid);
             let feature_histogram = FeatureHistogram::new(&sorted, fid, 256);

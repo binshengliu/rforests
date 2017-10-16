@@ -3,6 +3,7 @@ use std::fs::File;
 use metric::NDCGScorer;
 use super::regression_tree::RegressionTree;
 use train::dataset::DataSet;
+use util::*;
 
 pub struct LambdaMART {
     dataset: DataSet,
@@ -20,13 +21,13 @@ impl LambdaMART {
         let queries = self.dataset.group_by_queries();
         let n_instance = self.dataset.len();
 
-        let mut scores: Vec<f64> = Vec::with_capacity(n_instance);
+        let mut scores: Vec<Value> = Vec::with_capacity(n_instance);
         scores.resize(n_instance, 0.0);
 
-        let mut resps: Vec<f64> = Vec::with_capacity(n_instance);
+        let mut resps: Vec<Value> = Vec::with_capacity(n_instance);
         resps.resize(n_instance, 0.0);
 
-        let mut weights: Vec<f64> = Vec::with_capacity(n_instance);
+        let mut weights: Vec<Value> = Vec::with_capacity(n_instance);
         weights.resize(n_instance, 0.0);
 
         let mut sorted: Vec<Vec<usize>> = Vec::new();
@@ -37,13 +38,13 @@ impl LambdaMART {
     pub fn learn(&self) -> Result<()> {
         let ntrees = 2000;
         let ninstances = self.dataset.len();
-        let mut model_scores: Vec<f64> = Vec::with_capacity(ninstances);
+        let mut model_scores: Vec<Value> = Vec::with_capacity(ninstances);
         model_scores.resize(ninstances, 0.0);
 
-        let mut pseudo_response: Vec<f64> = Vec::with_capacity(ninstances);
+        let mut pseudo_response: Vec<Value> = Vec::with_capacity(ninstances);
         pseudo_response.resize(ninstances, 0.0);
 
-        let mut weights: Vec<f64> = Vec::with_capacity(ninstances);
+        let mut weights: Vec<Value> = Vec::with_capacity(ninstances);
         weights.resize(ninstances, 0.0);
 
         for i in 0..ntrees {
@@ -60,9 +61,9 @@ impl LambdaMART {
 
     pub fn update_pseudo_response(
         &self,
-        model_scores: &Vec<f64>,
-        pseudo_response: &mut Vec<f64>,
-        weights: &mut Vec<f64>,
+        model_scores: &Vec<Value>,
+        pseudo_response: &mut Vec<Value>,
+        weights: &mut Vec<Value>,
     ) {
         let ndcg = NDCGScorer::new(10);
         for query in self.dataset.group_by_queries().iter() {
