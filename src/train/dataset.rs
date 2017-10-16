@@ -25,20 +25,18 @@ impl Instance {
         }
     }
 
-    pub fn values(&self) -> std::slice::Iter<f64> {
-        self.values.iter()
     /// Returns an iterator over the feature values of the instance.
+    pub fn values<'a>(&'a self) -> impl Iterator<Item = f64> + 'a {
+        self.values.iter().cloned()
     }
 
     // See https://github.com/rust-lang/rust/issues/38615 for the
     // reason that 'a is required.
     /// Returns an iterator over the (feature id, value) pairs.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, f64)> + 'a {
-        self.values.iter().enumerate().map(
-            |(index, &value)| {
-                (index + 1, value)
-            },
-        )
+        self.values.iter().enumerate().map(|(index, &value)| {
+            (index + 1, value)
+        })
     }
 
     pub fn value(&self, id: u64) -> f64 {
