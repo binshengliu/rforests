@@ -45,14 +45,14 @@ impl std::fmt::Debug for HistogramBin {
 }
 
 #[derive(Debug)]
-pub struct FeatureHistogram {
+pub struct Histogram {
     // [from, to]
     bins: Vec<HistogramBin>,
 }
 
-impl FeatureHistogram {
-    fn new(bins: Vec<HistogramBin>) -> FeatureHistogram {
-        FeatureHistogram { bins: bins }
+impl Histogram {
+    fn new(bins: Vec<HistogramBin>) -> Histogram {
+        Histogram { bins: bins }
     }
 
     /// Return the best splitting point. The returned value is of the
@@ -89,8 +89,8 @@ impl FeatureHistogram {
 }
 
 use std::iter::FromIterator;
-impl FromIterator<(Value, usize, Value)> for FeatureHistogram {
-    fn from_iter<T>(iter: T) -> FeatureHistogram
+impl FromIterator<(Value, usize, Value)> for Histogram {
+    fn from_iter<T>(iter: T) -> Histogram
     where
         T: IntoIterator<Item = (Value, usize, Value)>,
     {
@@ -100,7 +100,7 @@ impl FromIterator<(Value, usize, Value)> for FeatureHistogram {
             })
             .collect();
 
-        FeatureHistogram::new(bins)
+        Histogram::new(bins)
     }
 }
 

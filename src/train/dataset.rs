@@ -333,7 +333,7 @@ impl ThresholdMap {
     pub fn histogram<I: Iterator<Item = (Id, Value, Value)>>(
         &self,
         iter: I,
-    ) -> FeatureHistogram {
+    ) -> Histogram {
         // (threshold value, count, sum)
         let mut hist: Vec<(Value, usize, Value)> = self.thresholds
             .iter()
@@ -544,7 +544,7 @@ impl DataSet {
         &self,
         fid: Id,
         iter: I,
-    ) -> FeatureHistogram {
+    ) -> Histogram {
         // Get the map by feature id.
         let threshold_map = &self.threshold_maps[fid - 1];
         let iter =
@@ -661,7 +661,7 @@ impl<'a> DataSetSample<'a> {
     }
 
     /// Returns a histogram of the feature of the data set sample.
-    pub fn feature_histogram(&self, fid: Id) -> FeatureHistogram {
+    pub fn feature_histogram(&self, fid: Id) -> Histogram {
         let iter = self.indices.iter().map(|&index| {
             (index, self.dataset[index].label())
         });
