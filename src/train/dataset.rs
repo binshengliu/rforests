@@ -7,6 +7,7 @@ use std;
 use std::cmp::Ordering::*;
 
 
+/// An instance of a label, a qid, and a group of feature values.
 #[derive(Debug, PartialEq)]
 pub struct Instance {
     qid: u64,
@@ -15,6 +16,7 @@ pub struct Instance {
 }
 
 impl Instance {
+    /// Creates a new instance.
     pub fn new(label: f64, qid: u64, values: Vec<f64>) -> Instance {
         Instance {
             label: label,
@@ -25,10 +27,12 @@ impl Instance {
 
     pub fn values(&self) -> std::slice::Iter<f64> {
         self.values.iter()
+    /// Returns an iterator over the feature values of the instance.
     }
 
     // See https://github.com/rust-lang/rust/issues/38615 for the
     // reason that 'a is required.
+    /// Returns an iterator over the (feature id, value) pairs.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, f64)> + 'a {
         self.values.iter().enumerate().map(
             |(index, &value)| {
@@ -37,19 +41,22 @@ impl Instance {
         )
     }
 
-    /// Return feature value of feature id.
     pub fn value(&self, id: u64) -> f64 {
         self.values.get((id - 1) as usize).map_or(0.0, |v| *v)
+    /// Returns the value of the given feature id.
     }
 
+    /// Returns the max feature id.
     pub fn max_feature_id(&self) -> u64 {
         self.values.len() as u64
     }
 
+    /// Returns the label of the instance.
     pub fn label(&self) -> f64 {
         self.label
     }
 
+    /// Returns the qid of the instance.
     pub fn qid(&self) -> u64 {
         self.qid
     }
@@ -83,6 +90,7 @@ impl std::ops::Deref for Instance {
     }
 }
 
+/// A collection of Instances with the same qid.
 pub struct Query<'a> {
     dataset: &'a DataSet,
 
