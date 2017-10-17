@@ -1,3 +1,4 @@
+use std;
 use train::dataset::*;
 use util::*;
 
@@ -7,7 +8,7 @@ struct Node {
     threshold: Option<Value>,
     left: Option<Box<Node>>,
     right: Option<Box<Node>>,
-    avg: Option<f64>,
+    output: Option<f64>,
 }
 
 impl Node {
@@ -18,7 +19,7 @@ impl Node {
             threshold: None,
             left: None,
             right: None,
-            avg: None,
+            output: None,
         }
     }
 
@@ -27,7 +28,7 @@ impl Node {
     pub fn split(&mut self, sample: TrainingSample, min_leaf_count: usize) {
         let split_result = sample.split(min_leaf_count);
         if split_result.is_none() {
-            self.avg = Some(sample.label_avg());
+            self.output = Some(sample.newton_output());
             return;
         }
 
@@ -49,7 +50,7 @@ impl Node {
 
     /// Evaluate an input
     pub fn evaluate(&self, instance: &Instance) -> f64 {
-        if let Some(value) = self.avg {
+        if let Some(value) = self.output {
             return value;
         }
 
@@ -63,6 +64,7 @@ impl Node {
 
 /// A regression tree.
 pub struct RegressionTree {
+    learning_rate: f64,
     min_leaf_count: usize,
     root: Option<Box<Node>>,
 }
@@ -70,8 +72,9 @@ pub struct RegressionTree {
 impl RegressionTree {
     /// Create a new regression tree, with at least min_leaf_count
     /// training instances on the leaves.
-    pub fn new(min_leaf_count: usize) -> RegressionTree {
+    pub fn new(learning_rate: f64, min_leaf_count: usize) -> RegressionTree {
         RegressionTree {
+            learning_rate: learning_rate,
             min_leaf_count: min_leaf_count,
             root: None,
         }
@@ -86,6 +89,30 @@ impl RegressionTree {
 
     /// Evaluate an input.
     pub fn evaluate(&self, instance: &Instance) -> f64 {
-        self.root.as_ref().unwrap().evaluate(instance)
+        self.root.as_ref().unwrap().evaluate(instance) * self.learning_rate
+    }
+}
+
+pub struct Ensemble {
+    trees: Vec<RegressionTree>,
+}
+
+impl Ensemble {
+    pub fn new() -> Ensemble {
+        Ensemble { trees: Vec::new() }
+    }
+}
+
+impl std::ops::Deref for Ensemble {
+    type Target = Vec<RegressionTree>;
+
+    fn deref(&self) -> &Vec<RegressionTree> {
+        &self.trees
+    }
+}
+
+impl std::ops::DerefMut for Ensemble {
+    fn deref_mut(&mut self) -> &mut Vec<RegressionTree> {
+        &mut self.trees
     }
 }

@@ -382,8 +382,11 @@ impl std::ops::Deref for DataSet {
 /// after each training.
 pub struct TrainingSet<'a> {
     dataset: &'a DataSet,
+    // Fitting result of the model.
     labels: Vec<Value>,
+    // Gradients, or lambdas.
     lambdas: Vec<Value>,
+    // Newton step weights
     weights: Vec<Value>,
 }
 
@@ -397,6 +400,11 @@ impl<'a> TrainingSet<'a> {
     /// Get (label, instance) at given index.
     fn get(&self, index: usize) -> (Value, &'a Instance) {
         (self.labels[index], &self.dataset[index])
+    }
+
+    /// Get (lambda, weight) at given index.
+    fn get_lambda_weight(&self, index: usize) -> (Value, Value) {
+        (self.lambdas[index], self.weights[index])
     }
 
     /// Returns an iterator over the feature ids in the training set.
@@ -553,9 +561,23 @@ impl<'a> TrainingSample<'a> {
         self.iter().map(move |(_index, _label, ins)| ins.value(fid))
     }
 
-    /// Returns the average value of the labels.
-    pub fn label_avg(&self) -> f64 {
-        self.label_iter().sum::<f64>() / (self.len() as f64)
+    /// Returns the Newton step value.
+    pub fn newton_output(&self) -> f64 {
+        let (lambda_sum, weight_sum) = self.indices.iter().fold(
+            (0.0, 0.0),
+            |(lambda_sum,
+              weight_sum),
+             &index| {
+                let (lambda, weight) = self.training.get_lambda_weight(index);
+                (lambda_sum + lambda, weight_sum + weight)
+            },
+        );
+
+        if weight_sum == 0.0 {
+            0.0
+        } else {
+            lambda_sum / weight_sum
+        }
     }
 
     /// Returns a histogram of the feature of the data set sample.

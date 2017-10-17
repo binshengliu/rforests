@@ -1,5 +1,5 @@
 use std::fs::File;
-use train::regression_tree::RegressionTree;
+use train::regression_tree::*;
 use train::dataset::*;
 use util::*;
 
@@ -23,13 +23,16 @@ impl LambdaMART {
     pub fn learn(&self) -> Result<()> {
         let ntrees = 2000;
 
+        let learning_rate = 0.1;
+        let min_leaf_count = 1;
+        let mut ensemble = Ensemble::new();
         let mut training = TrainingSet::from(&self.dataset);
         for _i in 0..ntrees {
             training.update_pseudo_response();
 
-            let min_leaf_count = 1;
-            let mut tree = RegressionTree::new(min_leaf_count);
+            let mut tree = RegressionTree::new(learning_rate, min_leaf_count);
             tree.fit(&training);
+            ensemble.push(tree);
         }
         Ok(())
     }
