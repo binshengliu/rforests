@@ -1,5 +1,4 @@
 use metric::NDCGScorer;
-use std::collections::HashMap;
 use metric::MetricScorer;
 use train::histogram::*;
 use util::{Id, Result, Value};
@@ -87,163 +86,6 @@ impl std::ops::Deref for Instance {
         &self.values
     }
 }
-
-/// A collection of Instances with the same qid.
-pub struct Query<'a> {
-    dataset: &'a DataSet,
-
-    // qid of this Query
-    qid: Id,
-
-    // beginning index in DataSet
-    start: usize,
-
-    // length in DataSet
-    len: usize,
-}
-
-impl<'a> Query<'a> {
-    /// Create a new Query.
-    pub fn new(
-        qid: Id,
-        dataset: &'a DataSet,
-        start: usize,
-        len: usize,
-    ) -> Query<'a> {
-        Query {
-            qid: qid,
-            dataset: dataset,
-            start: start,
-            len: len,
-        }
-    }
-
-    /// Create the qid of the Query.
-    pub fn qid(&self) -> Id {
-        self.qid
-    }
-
-    /// Returns an iterator over the `Instance`s of the Query.
-    pub fn iter(&'a self) -> impl Iterator<Item = &'a Instance> {
-        self.dataset[self.start..(self.start + self.len)].iter()
-    }
-
-    /// Returns Vec of &Instances sorted by the labels.
-    pub fn sorted_by_labels(&self) -> Vec<&Instance> {
-        use std::cmp::Ordering;
-
-        let mut indices: Vec<usize> = (self.start..(self.start + self.len))
-            .collect();
-        indices.sort_by(|&index1, &index2| {
-            let label1 = self.dataset[index1].label();
-            let label2 = self.dataset[index2].label();
-
-            // Descending
-            label2.partial_cmp(&label1).unwrap_or(Ordering::Equal)
-        });
-
-        indices
-            .into_iter()
-            .map(move |index| &self.dataset[index])
-            .collect()
-    }
-
-    /// Returns Vec of &Instances sorted by the model scores.
-    pub fn sorted_by_model_scores(
-        &self,
-        model_scores: &Vec<Value>,
-    ) -> Vec<&Instance> {
-        use std::cmp::Ordering;
-
-        let mut indices: Vec<usize> = (self.start..(self.start + self.len))
-            .collect();
-        indices.sort_by(|&index1, &index2| {
-            let label1 = model_scores[index1];
-            let label2 = model_scores[index2];
-
-            // Descending
-            label2.partial_cmp(&label1).unwrap_or(Ordering::Equal)
-        });
-
-        indices
-            .into_iter()
-            .map(move |index| &self.dataset[index])
-            .collect()
-    }
-
-    /// Compute the lambda value of this Query.
-    pub fn get_lambda<S>(
-        &self,
-        model_scores: &Vec<Value>,
-        metric: &S,
-    ) -> Vec<(usize, Value, Value)>
-    where
-        S: MetricScorer,
-    {
-        use std::cmp::Ordering;
-
-        // indices into DataSet
-        let mut indices: Vec<usize> = (self.start..(self.start + self.len))
-            .collect();
-
-        indices.sort_by(|&index1, &index2| {
-            let label1 = model_scores[index1];
-            let label2 = model_scores[index2];
-
-            // Descending
-            label2.partial_cmp(&label1).unwrap_or(Ordering::Equal)
-        });
-
-        let labels_sorted_by_scores: Vec<Value> = indices
-            .iter()
-            .map(|&index| self.dataset[index].label())
-            .collect();
-        let metric_delta = metric.delta(&labels_sorted_by_scores);
-
-        // hashmap: index -> (lambda, weight)
-        let mut result: HashMap<usize, (Value, Value)> = HashMap::new();
-        for &index1 in indices.iter() {
-            let instance1 = &self.dataset[index1];
-            for &index2 in indices.iter() {
-                let instance2 = &self.dataset[index2];
-                if instance1.label() <= instance2.label() {
-                    continue;
-                }
-
-                let metric_delta_value = metric_delta[index1][index2].abs();
-                let rho = 1.0 /
-                    (1.0 + (model_scores[index1] - model_scores[index2]).exp());
-                let lambda = metric_delta_value * rho;
-                let weight = rho * (1.0 - rho) * metric_delta_value;
-
-                result.entry(index1).or_insert((0.0, 0.0));
-                result.get_mut(&index1).unwrap().0 += lambda;
-                result.get_mut(&index1).unwrap().1 += weight;
-
-                result.entry(index2).or_insert((0.0, 0.0));
-                result.get_mut(&index2).unwrap().0 -= lambda;
-                result.get_mut(&index2).unwrap().1 += weight;
-
-            }
-        }
-
-        result
-            .into_iter()
-            .map(|(key, value)| (key, value.0, value.1))
-            .collect()
-    }
-}
-
-impl<'a> std::fmt::Display for Query<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let v = self.iter()
-            .map(|inst| inst.to_string())
-            .collect::<Vec<String>>();
-
-        write!(f, "{}", v.join("\n"))
-    }
-}
-
 /// A Mapping from the index of a Instance in the DataSet into a
 /// threshold interval.
 struct ThresholdMap {
@@ -478,50 +320,6 @@ impl DataSet {
             dataset: self,
             index: 0,
         }
-    }
-
-    /// Generate a vector of Query. Each Query keeps indices into the
-    /// DataSet.
-    pub fn group_by_queries<'a>(&'a self) -> Vec<Query<'a>> {
-        let mut queries: HashMap<Id, Query> = HashMap::new();
-
-        let mut prev_qid = None;
-        let mut start = 0;
-        let mut count = 0;
-        for (index, instance) in self.iter().enumerate() {
-            let qid = instance.qid();
-            if prev_qid == Some(qid) {
-                count += 1;
-                continue;
-            }
-
-            if count != 0 {
-                queries.entry(prev_qid.unwrap()).or_insert(Query::new(
-                    prev_qid.unwrap(),
-                    self,
-                    start,
-                    count,
-                ));
-            }
-
-            prev_qid = Some(qid);
-            start = index;
-            count = 1;
-        }
-
-        if count != 0 {
-            queries.entry(prev_qid.unwrap()).or_insert(Query::new(
-                prev_qid.unwrap(),
-                self,
-                start,
-                count,
-            ));
-        }
-
-        let queries: Vec<_> =
-            queries.into_iter().map(|(_key, value)| value).collect();
-
-        queries
     }
 
     /// Returns a Vec of the indices, sorted on the given feature.
@@ -851,18 +649,24 @@ mod tests {
 
     #[test]
     fn test_generate_queries() {
-        let s = "0 qid:3864 1:1.0 2:0.0 3:0.0 4:0.0 5:0.0\n2 qid:3864 1:1.0 2:0.007042 3:0.0 4:0.0 5:0.221591\n0 qid:3865 1:0.289474 2:0.014085 3:0.4 4:0.0 5:0.085227";
+        let s = "0 qid:3864 1:1.0 2:0.0 3:0.0 4:0.0 5:0.0
+2 qid:3864 1:1.0 2:0.007042 3:0.0 4:0.0 5:0.221591
+0 qid:3865 1:0.289474 2:0.014085 3:0.4 4:0.0 5:0.085227";
         let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
-        let mut queries = dataset.group_by_queries();
-        queries.sort_by_key(|q| q.qid());
 
+        assert_eq!(dataset.nfeatures, 5);
         assert_eq!(
-            queries[1].to_string(),
-            "0 qid:3865 1:0.289474 2:0.014085 3:0.4 4:0 5:0.085227"
+            dataset.instances[0],
+            Instance::new(0.0, 3864, vec![1.0, 0.0, 0.0, 0.0, 0.0])
         );
-        assert_eq!(queries.len(), 2);
-        assert_eq!(queries[0].qid(), 3864);
-        assert_eq!(queries[1].qid(), 3865);
+        assert_eq!(
+            dataset.instances[1],
+            Instance::new(2.0, 3864, vec![1.0, 0.007042, 0.0, 0.0, 0.221591])
+        );
+        assert_eq!(
+            dataset.instances[2],
+            Instance::new(0.0, 3865, vec![0.289474, 0.014085, 0.4, 0.0, 0.085227])
+        );
     }
 
     #[test]
