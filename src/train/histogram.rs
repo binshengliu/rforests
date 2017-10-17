@@ -105,6 +105,7 @@ impl FromIterator<(Value, usize, Value)> for Histogram {
 
 #[cfg(test)]
 mod test {
+    use train::dataset::*;
     use super::*;
 
     #[test]

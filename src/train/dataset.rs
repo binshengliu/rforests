@@ -1,3 +1,4 @@
+use metric::NDCGScorer;
 use std::collections::HashMap;
 use metric::MetricScorer;
 use train::histogram::*;
@@ -379,6 +380,30 @@ impl std::fmt::Debug for ThresholdMap {
     }
 }
 
+pub struct QueryIter<'a> {
+    dataset: &'a DataSet,
+    index: usize,
+}
+
+impl<'a> Iterator for QueryIter<'a> {
+    // (query id, Vec<instance index, label>)
+    type Item = (Id, Vec<Id>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.dataset.len() {
+            return None;
+        }
+
+        let qid = self.dataset[self.index].qid();
+        let queries = (self.index..self.dataset.len())
+            .take_while(|&index| qid == self.dataset[index].qid())
+            .collect::<Vec<Id>>();
+
+        self.index += queries.len();
+        Some((qid, queries))
+    }
+}
+
 /// A collection type containing a data set. The DataSet is a static
 /// data structure. See also TrainingDataSet which is a mutable data
 /// structure that its label values get updated after each training.
@@ -389,8 +414,6 @@ pub struct DataSet {
 }
 
 impl DataSet {
-    const MAX_BINS_COUNT: usize = 256;
-
     /// Create an empty DataSet.
     pub fn new(instances: Vec<Instance>, nfeatures: usize) -> DataSet {
         DataSet {
@@ -447,6 +470,14 @@ impl DataSet {
     /// Returns an iterator over the labels in the data set.
     pub fn label_iter<'a>(&'a self) -> impl Iterator<Item = Value> + 'a {
         self.instances.iter().map(|instance| instance.label)
+    }
+
+    /// Returns an iterator over the queries' indices.
+    pub fn query_iter(&self) -> QueryIter {
+        QueryIter {
+            dataset: self,
+            index: 0,
+        }
     }
 
     /// Generate a vector of Query. Each Query keeps indices into the
@@ -554,6 +585,8 @@ impl std::ops::Deref for DataSet {
 pub struct TrainingSet<'a> {
     dataset: &'a DataSet,
     labels: Vec<Value>,
+    lambdas: Vec<Value>,
+    weights: Vec<Value>,
 }
 
 impl<'a> TrainingSet<'a> {
@@ -606,6 +639,56 @@ impl<'a> TrainingSet<'a> {
         let iter = iter.map(|id| (id, self.label(id)));
         self.dataset.feature_histogram(fid, iter)
     }
+
+    /// Updates the lambda and weight for each instance.
+    pub fn update_pseudo_response(&mut self) {
+        let ndcg = NDCGScorer::new(10);
+
+        for (_qid, query) in self.dataset.query_iter() {
+            self.update_lambda_weight(&query, &ndcg);
+        }
+    }
+
+    /// Updates the lambda and weight for each instance grouped by query.
+    pub fn update_lambda_weight<S>(&mut self, query: &Vec<Id>, metric: &S)
+    where
+        S: MetricScorer,
+    {
+        use std::cmp::Ordering;
+
+        let mut query = query.clone();
+
+        query.sort_by(|&index1, &index2| {
+            // Descending
+            self.labels[index2]
+                .partial_cmp(&self.labels[index1])
+                .unwrap_or(Ordering::Equal)
+        });
+
+        let labels_sorted_by_scores: Vec<Value> =
+            query.iter().map(|&index| self.labels[index]).collect();
+        let metric_delta = metric.delta(&labels_sorted_by_scores);
+
+        for (metric_index1, &index1) in query.iter().enumerate() {
+            for (metric_index2, &index2) in query.iter().enumerate() {
+                if self.labels[index1] <= self.labels[index2] {
+                    continue;
+                }
+
+                let metric_delta_value =
+                    metric_delta[metric_index1][metric_index2].abs();
+                let rho = 1.0 /
+                    (1.0 + (self.labels[index1] - self.labels[index2]).exp());
+                let lambda = metric_delta_value * rho;
+                let weight = rho * (1.0 - rho) * metric_delta_value;
+
+                self.lambdas[index1] += lambda;
+                self.weights[index1] += weight;
+                self.lambdas[index2] -= lambda;
+                self.weights[index2] += weight;
+            }
+        }
+    }
 }
 
 impl<'a> From<&'a DataSet> for TrainingSet<'a> {
@@ -613,9 +696,15 @@ impl<'a> From<&'a DataSet> for TrainingSet<'a> {
         let len = dataset.len();
         let mut labels = Vec::with_capacity(len);
         labels.resize(len, 0.0);
+        let mut lambdas = Vec::with_capacity(len);
+        lambdas.resize(len, 0.0);
+        let mut weights = Vec::with_capacity(len);
+        weights.resize(len, 0.0);
         TrainingSet {
             dataset: dataset,
             labels: labels,
+            lambdas: lambdas,
+            weights: weights,
         }
     }
 }
@@ -759,6 +848,22 @@ impl<'a> std::fmt::Display for TrainingSample<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_generate_queries() {
+        let s = "0 qid:3864 1:1.0 2:0.0 3:0.0 4:0.0 5:0.0\n2 qid:3864 1:1.0 2:0.007042 3:0.0 4:0.0 5:0.221591\n0 qid:3865 1:0.289474 2:0.014085 3:0.4 4:0.0 5:0.085227";
+        let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
+        let mut queries = dataset.group_by_queries();
+        queries.sort_by_key(|q| q.qid());
+
+        assert_eq!(
+            queries[1].to_string(),
+            "0 qid:3865 1:0.289474 2:0.014085 3:0.4 4:0 5:0.085227"
+        );
+        assert_eq!(queries.len(), 2);
+        assert_eq!(queries[0].qid(), 3864);
+        assert_eq!(queries[1].qid(), 3865);
+    }
 
     #[test]
     fn test_instance_interface() {
@@ -911,5 +1016,31 @@ mod tests {
         assert_eq!(s, 32.0 / 3.0);
         assert_eq!(left.indices, vec![2, 3, 4]);
         assert_eq!(right.indices, vec![0, 7, 8]);
+    }
+
+    #[test]
+    fn test_dataset_group_by_query() {
+        // (label, qid, feature_values)
+        let data = vec![
+            (3.0, 1, vec![5.0]), // 0
+            (2.0, 1, vec![7.0]), // 1
+            (3.0, 2, vec![3.0]), // 2
+            (1.0, 5, vec![2.0]), // 3
+            (0.0, 5, vec![1.0]), // 4
+            (2.0, 7, vec![8.0]), // 5
+            (4.0, 7, vec![9.0]), // 6
+            (1.0, 6, vec![4.0]), // 7
+            (0.0, 6, vec![6.0]), // 8
+        ];
+
+        let mut dataset: DataSet = data.into_iter().collect();
+        dataset.generate_thresholds(3);
+        let mut iter = dataset.query_iter();
+        assert_eq!(iter.next(), Some((1, vec![0, 1])));
+        assert_eq!(iter.next(), Some((2, vec![2])));
+        assert_eq!(iter.next(), Some((5, vec![3, 4])));
+        assert_eq!(iter.next(), Some((7, vec![5, 6])));
+        assert_eq!(iter.next(), Some((6, vec![7, 8])));
+        assert_eq!(iter.next(), None);
     }
 }
