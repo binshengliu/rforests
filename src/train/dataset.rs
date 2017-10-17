@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use metric::NDCGScorer;
 use metric::MetricScorer;
 use train::histogram::*;
@@ -382,8 +383,9 @@ impl std::ops::Deref for DataSet {
 /// after each training.
 pub struct TrainingSet<'a> {
     dataset: &'a DataSet,
-    // Fitting result of the model.
-    labels: Vec<Value>,
+    // Fitting result of the model. We need to update the result at
+    // each leaf node.
+    labels: Vec<Cell<Value>>,
     // Gradients, or lambdas.
     lambdas: Vec<Value>,
     // Newton step weights
@@ -399,7 +401,7 @@ impl<'a> TrainingSet<'a> {
 
     /// Get (label, instance) at given index.
     fn get(&self, index: usize) -> (Value, &'a Instance) {
-        (self.labels[index], &self.dataset[index])
+        (self.labels[index].get(), &self.dataset[index])
     }
 
     /// Get (lambda, weight) at given index.
@@ -412,26 +414,34 @@ impl<'a> TrainingSet<'a> {
         self.dataset.fid_iter()
     }
 
+    pub fn init_labels(&mut self, values: &[Value]) {
+        assert_eq!(self.len(), values.len());
+        for (label, &value) in self.labels.iter_mut().zip(values.iter()) {
+            label.set(value);
+        }
+    }
+
     /// Returns an iterator over the labels in the data set.
     pub fn iter(&'a self) -> impl Iterator<Item = (Value, &Instance)> + 'a {
-        self.labels.iter().cloned().zip(self.dataset.iter())
+        self.labels.iter().map(|celled| celled.get()).zip(self.dataset.iter())
     }
 
     /// Returns an iterator over the labels in the data set.
     pub fn label_iter(&'a self) -> impl Iterator<Item = Value> + 'a {
-        self.labels.iter().cloned()
+        self.labels.iter().map(|celled| celled.get())
     }
 
     /// Returns the label value at given index.
     pub fn label(&self, index: usize) -> f64 {
-        self.labels[index]
+        self.labels[index].get()
     }
 
-    /// Adds to each label.
-    pub fn add(&mut self, delta: &[Value]) {
-        assert_eq!(self.labels.len(), delta.len());
-        for (index, label) in self.labels.iter_mut().enumerate() {
-            *label += delta[index];
+    /// Adds delta to each label specified in `indices`.
+    pub fn update_result(&self, indices: &[Id], delta: Value) {
+        assert!(indices.len() <= self.labels.len());
+        for &index in indices.iter() {
+            let celled_label = &self.labels[index];
+            celled_label.set(celled_label.get() + delta);
         }
     }
 
@@ -472,7 +482,7 @@ impl<'a> TrainingSet<'a> {
         });
 
         let labels_sorted_by_scores: Vec<Value> =
-            query.iter().map(|&index| self.labels[index]).collect();
+            query.iter().map(|&index| self.labels[index].get()).collect();
         let metric_delta = metric.delta(&labels_sorted_by_scores);
 
         for (metric_index1, &index1) in query.iter().enumerate() {
@@ -484,7 +494,7 @@ impl<'a> TrainingSet<'a> {
                 let metric_delta_value =
                     metric_delta[metric_index1][metric_index2].abs();
                 let rho = 1.0 /
-                    (1.0 + (self.labels[index1] - self.labels[index2]).exp());
+                    (1.0 + (self.labels[index1].get() - self.labels[index2].get()).exp());
                 let lambda = metric_delta_value * rho;
                 let weight = rho * (1.0 - rho) * metric_delta_value;
 
@@ -501,7 +511,7 @@ impl<'a> From<&'a DataSet> for TrainingSet<'a> {
     fn from(dataset: &'a DataSet) -> TrainingSet<'a> {
         let len = dataset.len();
         let mut labels = Vec::with_capacity(len);
-        labels.resize(len, 0.0);
+        labels.resize(len, Cell::new(0.0));
         let mut lambdas = Vec::with_capacity(len);
         lambdas.resize(len, 0.0);
         let mut weights = Vec::with_capacity(len);
@@ -578,6 +588,10 @@ impl<'a> TrainingSample<'a> {
         } else {
             lambda_sum / weight_sum
         }
+    }
+
+    pub fn update_output(&self, delta: Value) {
+        self.training.update_result(&self.indices, delta);
     }
 
     /// Returns a histogram of the feature of the data set sample.
@@ -781,7 +795,7 @@ mod tests {
         dataset.generate_thresholds(3);
 
         let mut training = TrainingSet::from(&dataset);
-        training.add(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
+        training.init_labels(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
 
         let sample = TrainingSample::from(&training);
         let (fid, threshold, s, left, right) = sample.split(1).unwrap();
@@ -815,7 +829,7 @@ mod tests {
         // 1 2 3 | 4 5 6 7 8 9
         // 1 2 3 4 5 6 | 7 8 9
         let mut training = TrainingSet::from(&dataset);
-        training.add(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
+        training.init_labels(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
 
         let sample = TrainingSample::from(&training);
         assert!(sample.split(9).is_none());

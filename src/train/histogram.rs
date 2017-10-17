@@ -128,7 +128,7 @@ mod test {
 
         // The label values are zero by default.
         let mut training = TrainingSet::from(&dataset);
-        training.add(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
+        training.init_labels(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
 
         let sample = TrainingSample::from(&training);
 

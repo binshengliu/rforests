@@ -28,7 +28,9 @@ impl Node {
     pub fn split(&mut self, sample: TrainingSample, min_leaf_count: usize) {
         let split_result = sample.split(min_leaf_count);
         if split_result.is_none() {
-            self.output = Some(sample.newton_output());
+            let value = sample.newton_output();
+            self.output = Some(value);
+            sample.update_output(value);
             return;
         }
 
