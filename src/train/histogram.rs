@@ -56,6 +56,27 @@ impl Histogram {
 
     /// Return the best splitting point. The returned value is of the
     /// form (threashold, s value).
+    ///
+    /// The best split minimizes the sum of the variance of the left
+    /// part and right part.
+    ///
+    /// Minimize sum_of_variance = sum((left_labels - left_label_avg)
+    /// ^ 2) + sum((right_labels - right_label_avg) ^ 2)
+    ///
+    /// where left_label_avg = sum(left_labels) / left_count, and
+    /// right_label_avg = sum(right_labels) / right_count.
+    ///
+    /// expand the right:
+    ///
+    /// sum_of_variance = sum(left_labels ^ 2) - sum(left_labels) ^ 2
+    /// / left_count + sum(right_labels ^ 2) - sum(right_labels) ^ 2 /
+    /// right_count
+    ///
+    /// sum_of_variance = sum(all_labels ^ 2) - sum(left_labels) ^ 2 -
+    /// sum(right_labels) ^ 2
+    ///
+    /// To minimize the result, we just need to find a point that
+    /// maximizes sum(left_label) ^ 2 + sum(right_labels) ^ 2
     pub fn best_split(&self, min_leaf: usize) -> Option<(Value, f64)> {
         let sum = self.bins.last().unwrap().acc_sum;
         let count = self.bins.last().unwrap().acc_count;

@@ -603,7 +603,16 @@ impl<'a> TrainingSample<'a> {
     }
 
     /// Split self. Returns (split feature, threshold, s value, left
-    /// child, right child).
+    /// child, right child). For each split, if its variance is zero,
+    /// it's non-splitable. To facilitate computing the variance. We
+    /// made a little transformation.
+    ///
+    /// variance = sum((labels - label_avg) ^ 2), where label_avg =
+    /// sum(labels) / count.
+    ///
+    /// Finally, the variance is computed using the formula:
+    ///
+    /// variance = sum(labels ^ 2) - sum(labels) ^ 2 / left_count
     pub fn split(
         &self,
         min_leaf_count: usize,
