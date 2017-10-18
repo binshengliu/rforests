@@ -6,9 +6,9 @@ use util::*;
 struct Node {
     fid: Option<Id>,
     threshold: Option<Value>,
+    output: Option<f64>,
     left: Option<Box<Node>>,
     right: Option<Box<Node>>,
-    output: Option<f64>,
 }
 
 impl Node {
@@ -64,11 +64,26 @@ impl Node {
     }
 }
 
+impl std::fmt::Debug for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "Node {{ fid: {:?}, threshold: {:?}, output: {:?}, left: {:?}, right: {:?} }}",
+            self.fid,
+            self.threshold,
+            self.output,
+            self.left,
+            self.right
+        )
+    }
+}
+
 /// A regression tree.
+#[derive(Debug)]
 pub struct RegressionTree {
     learning_rate: f64,
     min_leaf_count: usize,
-    root: Option<Box<Node>>,
+    root: Option<Node>,
 }
 
 impl RegressionTree {
@@ -87,6 +102,7 @@ impl RegressionTree {
         let mut root = Node::new();
         let sample = TrainingSample::from(training);
         root.split(sample, self.min_leaf_count);
+        self.root = Some(root);
     }
 
     /// Evaluate an input.
@@ -116,5 +132,45 @@ impl std::ops::Deref for Ensemble {
 impl std::ops::DerefMut for Ensemble {
     fn deref_mut(&mut self) -> &mut Vec<RegressionTree> {
         &mut self.trees
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_tree_fitting() {
+        // (label, qid, feature_values)
+        let data = vec![
+            (3.0, 1, vec![3.0, 0.0]), // 0
+            (2.0, 1, vec![2.0, 0.0]), // 1
+            (1.0, 1, vec![1.0, 0.0]), // 2
+            (1.0, 1, vec![1.0, 0.0]), // 3
+            (3.0, 1, vec![3.0, 0.0]), // 4
+            (2.0, 1, vec![2.0, 0.0]), // 5
+        ];
+
+        let mut dataset: DataSet = data.into_iter().collect();
+        dataset.generate_thresholds(3);
+
+        let mut training = TrainingSet::from(&dataset);
+        // training.init_model_scores(&[3.0, 2.0]);
+        let learning_rate = 0.1;
+        let min_leaf_count = 1;
+
+        for _ in 0..10 {
+            training.update_lambdas_weights();
+
+            // println!("{:?}", training.lambdas);
+            // println!("{:?}", training.weights);
+
+            let mut tree = RegressionTree::new(learning_rate, min_leaf_count);
+            tree.fit(&training);
+
+            // println!("{:?}", tree);
+            // println!("{:?}", training.model_scores);
+            // println!("-----------------------------------");
+        }
     }
 }
