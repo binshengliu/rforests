@@ -38,6 +38,10 @@ impl MetricScorer for NDCGScorer {
         format!("NDCG@{}", self.truncation_level)
     }
 
+    fn get_k(&self) -> usize {
+        self.truncation_level
+    }
+
     fn score(&self, labels: &[f64]) -> f64 {
         let max = self.max_dcg(labels);
         if max.abs() == 0.0 {
@@ -56,11 +60,14 @@ impl MetricScorer for NDCGScorer {
         let mut delta = Vec::with_capacity(nlabels);
         delta.resize(nlabels, row);
 
-        for i in 0..nlabels {
+        let ideal_dcg = self.max_dcg(labels);
+
+        let size = usize::min(self.truncation_level, nlabels);
+        for i in 0..size {
             for j in i + 1..nlabels {
                 delta[i][j] = (self.gain(labels[i]) - self.gain(labels[j])) *
                     (self.discount(i) - self.discount(j));
-                delta[i][j] /= self.max_dcg(labels);
+                delta[i][j] /= ideal_dcg;
                 delta[j][i] = delta[i][j];
             }
         }

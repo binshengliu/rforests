@@ -25,6 +25,10 @@ impl MetricScorer for DCGScorer {
         format!("DCG@{}", self.truncation_level)
     }
 
+    fn get_k(&self) -> usize {
+        self.truncation_level
+    }
+
     fn score(&self, labels: &[f64]) -> f64 {
         let n = usize::min(labels.len(), self.truncation_level);
         (0..n)

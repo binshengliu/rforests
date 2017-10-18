@@ -656,8 +656,13 @@ impl<'d> TrainingSet<'d> {
             .collect();
         let metric_delta = metric.delta(&labels_sorted_by_scores);
 
+        let k = metric.get_k();
         for (metric_index1, &index1) in query.iter().enumerate() {
             for (metric_index2, &index2) in query.iter().enumerate() {
+                if metric_index1 > k && metric_index2 > k {
+                    break;
+                }
+
                 if self.dataset[index1].label() <=
                     self.dataset[index2].label()
                 {

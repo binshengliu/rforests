@@ -105,7 +105,7 @@ impl Histogram {
                 sum_right * sum_right / count_right as f64;
 
             match split {
-                Some((old_s, _old_threashold)) => {
+                Some((_old_threashold, old_s)) => {
                     if s_value > old_s {
                         split = Some((bin.threashold, s_value));
                     }
