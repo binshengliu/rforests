@@ -27,9 +27,15 @@ where
 
     pub fn learn(&self) -> Result<()> {
         let learning_rate = 0.1;
-        let min_leaf_count = 1;
+        let min_leaf_count = 10;
         let mut ensemble = Ensemble::new();
         let mut training = TrainingSet::from(&self.dataset);
+        println!(
+            "{:<7} | {:>9} | {:>9}",
+            "#iter",
+            self.metric.name() + "-T",
+            self.metric.name() + "-V"
+        );
         for i in 0..self.trees {
             training.update_lambdas_weights();
 
@@ -39,7 +45,7 @@ where
 
             let score = training.evaluate(&self.metric);
 
-            println!("{}\t{}", i, score);
+            println!("{:<7} | {:>9.4} | {:>9.4}", i, score, "");
         }
         Ok(())
     }
