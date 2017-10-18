@@ -2,19 +2,24 @@ use std::fs::File;
 use train::regression_tree::*;
 use train::dataset::*;
 use util::*;
+use metric::*;
 
-pub struct LambdaMART {
+pub struct LambdaMART<M> {
     dataset: DataSet,
+    trees: usize,
+    metric: M,
 }
 
-impl LambdaMART {
-    pub fn new() -> LambdaMART {
-        let path = "/home/lbs/code/rforests/data/train-lite.txt";
-        let f = File::open(path).unwrap();
-        let max_bins = 256;
-        let mut dataset = DataSet::new(max_bins);
-        dataset.load(f).unwrap();
-        LambdaMART { dataset: dataset }
+impl<M> LambdaMART<M>
+where
+    M: MetricScorer,
+{
+    pub fn new(dataset: DataSet, trees: usize, metric: M) -> LambdaMART<M> {
+        LambdaMART {
+            dataset: dataset,
+            trees: trees,
+            metric: metric,
+        }
     }
 
     pub fn init(&self) -> Result<()> {
@@ -22,22 +27,41 @@ impl LambdaMART {
     }
 
     pub fn learn(&self) -> Result<()> {
-        let ntrees = 2000;
-
         let learning_rate = 0.1;
         let min_leaf_count = 1;
         let mut ensemble = Ensemble::new();
         let mut training = TrainingSet::from(&self.dataset);
-        for _i in 0..ntrees {
+        for i in 0..self.trees {
             training.update_lambdas_weights();
 
             let mut tree = RegressionTree::new(learning_rate, min_leaf_count);
             tree.fit(&training);
             ensemble.push(tree);
+
+            let score = training.evaluate(&self.metric);
+
+            println!("{}\t{}", i, score);
         }
         Ok(())
     }
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_lambda_mart() {
+        let path = "/home/lbs/code/rforests/data/train-lite.txt";
+        let max_bins = 256;
+        let f = File::open(path).unwrap();
+        let mut dataset = DataSet::new(max_bins);
+        dataset.load(f).unwrap();
+
+        let trees = 200;
+        let ndcg = NDCGScorer::new(10);
+        let lambdamart = LambdaMART::new(dataset, trees, ndcg);
+        lambdamart.init().unwrap();
+        lambdamart.learn().unwrap();
+    }
+}
