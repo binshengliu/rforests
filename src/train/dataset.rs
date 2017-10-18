@@ -298,6 +298,7 @@ impl DataSet {
     /// FromIterator. Basically, this is a issue how we customize the
     /// grouping of the data.
     fn generate_thresholds(&mut self) {
+        debug!("Generating thresholds.");
         for fid in self.fid_iter() {
             let values: Vec<Value> = self.instances
                 .iter()
@@ -306,6 +307,7 @@ impl DataSet {
             let map = ThresholdMap::new(values, self.max_bins);
             self.threshold_maps.push(map);
         }
+        debug!("Generated thresholds.");
     }
 
     /// Load data set from a reader.
@@ -334,15 +336,18 @@ impl DataSet {
     {
         let mut instances = Vec::new();
         let mut nfeatures = 0;
+        debug!("Loading data...");
         for instance_result in SvmLightFile::instances(reader) {
             let instance = instance_result?;
             nfeatures =
                 usize::max(nfeatures, instance.max_feature_id() as usize);
             instances.push(instance);
         }
+        debug!("Loaded {} instances, {} features.", instances.len(), nfeatures);
 
         self.instances = instances;
         self.nfeatures = nfeatures;
+
         self.generate_thresholds();
         Ok(())
     }
