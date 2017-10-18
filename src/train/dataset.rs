@@ -162,13 +162,32 @@ impl ThresholdMap {
     /// The input is an iterator over (instance id, feature value,
     /// label value).
     ///
-    /// There are two
-    /// cases when we need to regenerate the histogram. First, after
-    /// each iteration of learning, the label values are
-    /// different. But this is a situation that we can update the
-    /// histogram instead of constructing from scratch. Second, after
-    /// a tree node is splited, each sub-node contains different part
-    /// of data.
+    /// There are two cases when we need to regenerate the
+    /// histogram. First, after each iteration of learning, the label
+    /// values are different. But this is a situation that we can
+    /// update the histogram instead of constructing from
+    /// scratch. Second, after a tree node is splited, each sub-node
+    /// contains different part of data.
+    ///
+    /// # Examples
+    ///
+    /// let data = vec![
+    ///     // target value, feature values
+    ///     (3.0, 5.0),
+    ///     (2.0, 7.0),
+    ///     (3.0, 3.0),
+    ///     (1.0, 2.0),
+    ///     (0.0, 1.0),
+    ///     (2.0, 8.0),
+    ///     (4.0, 9.0),
+    ///     (1.0, 4.0),
+    ///     (0.0, 6.0),
+    /// ];
+    ///
+    /// let map = ThresholdMap::new(data.iter().map(|&(_, value)| value), 3);
+    /// let histogram = map.histogram(data.iter().map(|&(target, _)| target));
+    ///
+    /// assert_eq!(histogram.variance(), 15.555555555555557);
     pub fn histogram<I: Iterator<Item = (Id, Value, Value)>>(
         &self,
         iter: I,
@@ -472,24 +491,10 @@ impl DataSet {
         }
     }
 
-    /// Returns a Vec of the indices, sorted on the given feature.
-    pub fn feature_sorted_indices(&self, fid: Id) -> Vec<usize> {
-        use std::cmp::Ordering;
-
-        let n_instances = self.len();
-        let mut indices: Vec<usize> = (0..n_instances).collect();
-        indices.sort_by(|&index1, &index2| {
-            let value1 = self[index1].value(fid);
-            let value2 = self[index2].value(fid);
-            value1.partial_cmp(&value2).unwrap_or(Ordering::Equal)
-        });
-        indices
-    }
-
     /// Generate histogram for the specified instances. `fid`
     /// specifies the feature used to split into histogram
     /// bins. `(index of the instance, value to do statistics)`.
-    pub fn feature_histogram<I: Iterator<Item = (Id, Value)>>(
+    fn feature_histogram<I: Iterator<Item = (Id, Value)>>(
         &self,
         fid: Id,
         iter: I,
@@ -586,7 +591,7 @@ impl<'a> TrainingSet<'a> {
     /// is used to make statistics of the lambda values, which is
     /// actually the target value that we aims to fit to in the
     /// current iteration of learning.
-    pub fn feature_histogram<I: Iterator<Item = Id>>(
+    fn feature_histogram<I: Iterator<Item = Id>>(
         &self,
         fid: Id,
         iter: I,
@@ -761,7 +766,7 @@ impl<'a> TrainingSample<'a> {
     }
 
     /// Returns a histogram of the feature of the data set sample.
-    pub fn feature_histogram(&self, fid: Id) -> Histogram {
+    fn feature_histogram(&self, fid: Id) -> Histogram {
         self.training.feature_histogram(
             fid,
             self.indices.iter().cloned(),
@@ -901,22 +906,6 @@ mod tests {
 
         // qid()
         assert_eq!(instance.qid(), 3333);
-    }
-
-    #[test]
-    fn test_sorted_feature() {
-        let s = "0 qid:1 1:3.0 2:0.0 3:1.0\n2 qid:2 1:1.0 2:1.0 3:3.0\n0 qid:3 1:0.0 2:2.0 3:2.0";
-        let mut dataset = DataSet::new(3);
-        dataset.load(::std::io::Cursor::new(s)).unwrap();
-
-        let sorted_indices = dataset.feature_sorted_indices(1);
-        assert_eq!(sorted_indices, vec![2, 1, 0]);
-
-        let sorted_indices = dataset.feature_sorted_indices(2);
-        assert_eq!(sorted_indices, vec![0, 1, 2]);
-
-        let sorted_indices = dataset.feature_sorted_indices(3);
-        assert_eq!(sorted_indices, vec![0, 2, 1]);
     }
 
     #[test]
