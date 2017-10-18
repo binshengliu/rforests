@@ -25,28 +25,9 @@ impl Instance {
         }
     }
 
-    /// Returns an iterator over the feature values of the instance.
-    pub fn values<'a>(&'a self) -> impl Iterator<Item = Value> + 'a {
-        self.values.iter().cloned()
-    }
-
-    // See https://github.com/rust-lang/rust/issues/38615 for the
-    // reason that 'a is required.
-    /// Returns an iterator over the (feature id, value) pairs.
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Id, Value)> + 'a {
-        self.values.iter().enumerate().map(|(index, &value)| {
-            (index + 1, value)
-        })
-    }
-
-    /// Returns the value of the given feature id.
-    pub fn value(&self, id: Id) -> Value {
-        self.values.get(id - 1).map_or(0.0, |v| *v)
-    }
-
-    /// Returns the max feature id.
-    pub fn max_feature_id(&self) -> Id {
-        self.values.len() as Id
+    /// Returns the qid of the instance.
+    pub fn qid(&self) -> Id {
+        self.qid
     }
 
     /// Returns the label of the instance.
@@ -54,9 +35,23 @@ impl Instance {
         self.label
     }
 
-    /// Returns the qid of the instance.
-    pub fn qid(&self) -> Id {
-        self.qid
+    /// Returns the value of the given feature id.
+    pub fn value(&self, id: Id) -> Value {
+        self.values.get(id - 1).map_or(0.0, |v| *v)
+    }
+
+    // See https://github.com/rust-lang/rust/issues/38615 for the
+    // reason that 'a is required.
+    /// Returns an iterator over the (feature id, value) pairs.
+    pub fn value_iter<'a>(&'a self) -> impl Iterator<Item = (Id, Value)> + 'a {
+        self.values.iter().enumerate().map(|(index, &value)| {
+            (index + 1, value)
+        })
+    }
+
+    /// Returns the max feature id.
+    pub fn max_feature_id(&self) -> Id {
+        self.values.len() as Id
     }
 }
 

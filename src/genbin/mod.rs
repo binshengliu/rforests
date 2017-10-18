@@ -82,7 +82,7 @@ pub fn execute(args: Args) -> Result<()> {
         for instance in SvmLightFile::instances(output) {
             let instance = instance?;
 
-            for (id, value) in instance.iter() {
+            for (id, value) in instance.value_iter() {
                 let hash = &mut feature_value_hash[id - 1];
                 *hash.entry(value.round() as u32).or_insert(0) += 1;
             }
@@ -113,7 +113,7 @@ pub fn execute(args: Args) -> Result<()> {
             let instance = instance?;
 
             // does not comiple // TODO some features are skipped
-            for (id, value) in instance.iter() {
+            for (id, value) in instance.value_iter() {
                 let values = &value_table[id - 1];
                 let index = values.binary_search(&&(value as u32));
                 feature_indices[id - 1].push(index.unwrap() as u32);

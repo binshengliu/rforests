@@ -167,7 +167,7 @@ impl FilesStats {
             let instance = instance?;
             instance_count += 1;
 
-            for (id, value) in instance.iter() {
+            for (id, value) in instance.value_iter() {
                 self.update(id, value);
             }
 
