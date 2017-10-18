@@ -1,4 +1,3 @@
-use std::fs::File;
 use train::regression_tree::*;
 use train::dataset::*;
 use util::*;
@@ -49,6 +48,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::fs::File;
 
     #[test]
     fn test_lambda_mart() {
