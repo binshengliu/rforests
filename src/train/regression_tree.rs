@@ -25,37 +25,6 @@ impl Node {
         }
     }
 
-    /// Split on the data set sample and creates children, until self
-    /// becomes the leaf node.
-    pub fn split(
-        &mut self,
-        sample: TrainingSample,
-        min_samples_per_leaf: usize,
-    ) {
-        let split_result = sample.split(min_samples_per_leaf);
-        if split_result.is_none() {
-            let value = sample.newton_output();
-            self.output = Some(value);
-            sample.update_output(value);
-            return;
-        }
-
-        let (fid, threshold, _s_value, left_sample, right_sample) =
-            split_result.unwrap();
-
-        self.fid = Some(fid);
-        self.threshold = Some(threshold);
-
-        let mut left = Node::new();
-        left.split(left_sample, min_samples_per_leaf);
-
-        let mut right = Node::new();
-        right.split(right_sample, min_samples_per_leaf);
-
-        self.left = Some(Box::new(left));
-        self.right = Some(Box::new(right));
-    }
-
     /// Evaluate an input
     pub fn evaluate(&self, instance: &Instance) -> f64 {
         if let Some(value) = self.output {
@@ -108,10 +77,6 @@ impl RegressionTree {
             max_leaves: max_leaves,
             root: None,
         }
-    }
-
-    fn create_node() -> Node {
-        Node::new()
     }
 
     /// Fit to a training.
