@@ -178,10 +178,10 @@ impl ThresholdMap {
         &self,
         iter: I,
     ) -> Histogram {
-        // (threshold value, count, sum)
-        let mut hist: Vec<(Value, usize, Value)> = self.thresholds
+        // (threshold value, count, sum, squared_sum)
+        let mut hist: Vec<(Value, usize, Value, Value)> = self.thresholds
             .iter()
-            .map(|&threshold| (threshold, 0, 0.0))
+            .map(|&threshold| (threshold, 0, 0.0, 0.0))
             .collect();
 
         for (id, feature_value, label) in iter {
@@ -192,11 +192,13 @@ impl ThresholdMap {
 
             hist[threshold_index].1 += 1;
             hist[threshold_index].2 += label;
+            hist[threshold_index].3 += label * label;
         }
 
         for i in 1..hist.len() {
             hist[i].1 += hist[i - 1].1;
             hist[i].2 += hist[i - 1].2;
+            hist[i].3 += hist[i - 1].3;
         }
         let feature_histogram = hist.into_iter().collect();
         feature_histogram
@@ -640,15 +642,7 @@ impl<'a> TrainingSample<'a> {
 
     /// Split self. Returns (split feature, threshold, s value, left
     /// child, right child). For each split, if its variance is zero,
-    /// it's non-splitable. To facilitate computing the variance. We
-    /// made a little transformation.
-    ///
-    /// variance = sum((labels - label_avg) ^ 2), where label_avg =
-    /// sum(labels) / count.
-    ///
-    /// Finally, the variance is computed using the formula:
-    ///
-    /// variance = sum(labels ^ 2) - sum(labels) ^ 2 / left_count
+    /// it's non-splitable.
     pub fn split(
         &self,
         min_leaf_count: usize,

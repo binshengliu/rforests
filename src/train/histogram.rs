@@ -11,6 +11,9 @@ struct HistogramBin {
 
     // Accumulated sum of all the labels of this and preceding bins.
     acc_sum: f64,
+
+    // Accumulated squared sum of all the labels of this and preceding bins.
+    acc_squared_sum: f64,
 }
 
 impl HistogramBin {
@@ -18,11 +21,13 @@ impl HistogramBin {
         threashold: f64,
         acc_count: usize,
         acc_sum: f64,
+        acc_squared_sum: f64,
     ) -> HistogramBin {
         HistogramBin {
             threashold: threashold,
             acc_count: acc_count,
             acc_sum: acc_sum,
+            acc_squared_sum: acc_squared_sum,
         }
     }
 }
@@ -78,6 +83,11 @@ impl Histogram {
     /// To minimize the result, we just need to find a point that
     /// maximizes sum(left_label) ^ 2 + sum(right_labels) ^ 2
     pub fn best_split(&self, min_leaf: usize) -> Option<(Value, f64)> {
+        let variance = self.variance();
+        if variance.abs() <= 0.000001 {
+            return None;
+        }
+
         let sum = self.bins.last().unwrap().acc_sum;
         let count = self.bins.last().unwrap().acc_count;
         let mut split: Option<(f64, f64)> = None;
@@ -106,17 +116,39 @@ impl Histogram {
 
         split
     }
+
+    /// To facilitate computing the variance. We made a little
+    /// transformation.
+    ///
+    /// variance = sum((labels - label_avg) ^ 2), where label_avg =
+    /// sum(labels) / count.
+    ///
+    /// Finally, the variance is computed using the formula:
+    ///
+    /// variance = sum(labels ^ 2) - sum(labels) ^ 2 / left_count
+    fn variance(&self) -> f64 {
+        let sum = self.bins.last().unwrap().acc_sum;
+        let count = self.bins.last().unwrap().acc_count;
+        let squared_sum = self.bins.last().unwrap().acc_squared_sum;
+
+        squared_sum - sum * sum / count as f64
+    }
 }
 
 use std::iter::FromIterator;
-impl FromIterator<(Value, usize, Value)> for Histogram {
+impl FromIterator<(Value, usize, Value, Value)> for Histogram {
     fn from_iter<T>(iter: T) -> Histogram
     where
-        T: IntoIterator<Item = (Value, usize, Value)>,
+        T: IntoIterator<Item = (Value, usize, Value, Value)>,
     {
         let bins: Vec<HistogramBin> = iter.into_iter()
-            .map(|(threshold, acc_count, acc_sum)| {
-                HistogramBin::new(threshold, acc_count, acc_sum)
+            .map(|(threshold, acc_count, acc_sum, acc_squared_sum)| {
+                HistogramBin::new(
+                    threshold,
+                    acc_count,
+                    acc_sum,
+                    acc_squared_sum,
+                )
             })
             .collect();
 
@@ -153,21 +185,34 @@ mod test {
             dataset.feature_histogram(1, lambdas.iter().cloned().enumerate());
 
         assert_eq!(
-            histogram.bins,
-            vec![
-                // threashold: 1.0, values: [1.0], labels: [0.0]
-                HistogramBin::new(1.0 + 0.0 * 8.0 / 3.0, 1, 0.0),
-                // threashold: 3.66, values: [1.0, 2.0, 3.0], labels:
-                // [0.0, 1.0, 3.0]
-                HistogramBin::new(1.0 + 1.0 * 8.0 / 3.0, 3, 4.0),
-                // threashold: 6.33, values: [1.0, 2.0, 3.0, 4.0, 5.0,
-                // 6.0], labels: [0.0, 1.0, 3.0, 1.0, 3.0, 0.0]
-                HistogramBin::new(1.0 + 2.0 * 8.0 / 3.0, 6, 8.0),
-                // threashold: MAX, values: [1.0, 2.0, 3.0, 4.0, 5.0,
-                // 6.0, 7.0, 8.0, 9.0], labels: [0.0, 1.0, 3.0, 1.0,
-                // 3.0, 0.0, 2.0, 2.0, 4.0]
-                HistogramBin::new(std::f64::MAX, 9, 16.0),
-            ]
+            histogram.bins[0],
+            // threashold: 1.0, values: [1.0], labels: [0.0]
+            HistogramBin::new(1.0 + 0.0 * 8.0 / 3.0, 1, 0.0, 0.0)
         );
+
+        assert_eq!(
+            histogram.bins[1],
+            // threashold: 3.66, values: [1.0, 2.0, 3.0], labels:
+            // [0.0, 1.0, 3.0]
+            HistogramBin::new(1.0 + 1.0 * 8.0 / 3.0, 3, 4.0, 10.0)
+        );
+
+        assert_eq!(
+            histogram.bins[2],
+            // threashold: 6.33, values: [1.0, 2.0, 3.0, 4.0, 5.0,
+            // 6.0], labels: [0.0, 1.0, 3.0, 1.0, 3.0, 0.0]
+            HistogramBin::new(1.0 + 2.0 * 8.0 / 3.0, 6, 8.0, 20.0)
+        );
+
+        assert_eq!(
+            histogram.bins[3],
+            // threashold: MAX, values: [1.0, 2.0, 3.0, 4.0, 5.0,
+            // 6.0, 7.0, 8.0, 9.0], labels: [0.0, 1.0, 3.0, 1.0,
+            // 3.0, 0.0, 2.0, 2.0, 4.0]
+            HistogramBin::new(std::f64::MAX, 9, 16.0, 44.0)
+        );
+
+        // 15.555555555555557
+        assert_eq!(histogram.variance(), 15.555555555555557);
     }
 }
