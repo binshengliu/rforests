@@ -119,6 +119,15 @@ impl Ensemble {
     pub fn new() -> Ensemble {
         Ensemble { trees: Vec::new() }
     }
+
+    pub fn evaluate(&self, instance: &Instance) -> f64 {
+        let mut result = 0.0;
+        for tree in &self.trees {
+            result += tree.evaluate(instance);
+        }
+
+        result
+    }
 }
 
 impl std::ops::Deref for Ensemble {
