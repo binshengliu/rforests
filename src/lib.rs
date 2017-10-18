@@ -72,7 +72,7 @@ pub fn execute(args: Args) -> Result<()> {
 
 macro_rules! each_subcommand{
     ($mac:ident) => {
-        $mac!(genbin);
+        // $mac!(genbin);
         $mac!(train);
         $mac!(predict);
     }
