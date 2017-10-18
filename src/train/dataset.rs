@@ -423,7 +423,10 @@ impl<'a> TrainingSet<'a> {
 
     /// Returns an iterator over the labels in the data set.
     pub fn iter(&'a self) -> impl Iterator<Item = (Value, &Instance)> + 'a {
-        self.labels.iter().map(|celled| celled.get()).zip(self.dataset.iter())
+        self.labels.iter().map(|celled| celled.get()).zip(
+            self.dataset
+                .iter(),
+        )
     }
 
     /// Returns an iterator over the labels in the data set.
@@ -494,7 +497,10 @@ impl<'a> TrainingSet<'a> {
                 let metric_delta_value =
                     metric_delta[metric_index1][metric_index2].abs();
                 let rho = 1.0 /
-                    (1.0 + (self.labels[index1].get() - self.labels[index2].get()).exp());
+                    (1.0 +
+                         (self.labels[index1].get() -
+                             self.labels[index2].get())
+                             .exp());
                 let lambda = metric_delta_value * rho;
                 let weight = rho * (1.0 - rho) * metric_delta_value;
 
