@@ -133,6 +133,7 @@ impl RegressionTree {
                 let value = sample.newton_output();
                 node.borrow_mut().output = Some(value);
                 sample.update_output(value);
+                leaves += 1;
                 continue;
             }
 
@@ -141,26 +142,28 @@ impl RegressionTree {
                 let value = sample.newton_output();
                 node.borrow_mut().output = Some(value);
                 sample.update_output(value);
-                return;
-            } else {
-                let (fid, threshold, _s_value, left_sample, right_sample) =
-                    split_result.unwrap();
-
-                let mut node = node.borrow_mut();
-                node.fid = Some(fid);
-                node.threshold = Some(threshold);
-                let left = Rc::new(RefCell::new(Node::new()));
-                let right = Rc::new(RefCell::new(Node::new()));
-
-                queue.push((left.clone(), left_sample));
-                queue.push((right.clone(),right_sample));
+                leaves += 1;
+                continue;
             }
+
+            let (fid, threshold, _s_value, left_sample, right_sample) =
+                split_result.unwrap();
+
+            let mut node = node.borrow_mut();
+            node.fid = Some(fid);
+            node.threshold = Some(threshold);
+            let left = Rc::new(RefCell::new(Node::new()));
+            let right = Rc::new(RefCell::new(Node::new()));
+
+            queue.push((left.clone(), left_sample));
+            queue.push((right.clone(), right_sample));
         }
     }
 
     /// Evaluate an input.
     pub fn evaluate(&self, instance: &Instance) -> f64 {
-        self.root.as_ref().unwrap().borrow().evaluate(instance) * self.learning_rate
+        self.root.as_ref().unwrap().borrow().evaluate(instance) *
+            self.learning_rate
     }
 }
 
@@ -228,8 +231,11 @@ mod test {
             // println!("{:?}", training.lambdas);
             // println!("{:?}", training.weights);
 
-            let mut tree =
-                RegressionTree::new(learning_rate, max_leaves, min_samples_per_leaf);
+            let mut tree = RegressionTree::new(
+                learning_rate,
+                max_leaves,
+                min_samples_per_leaf,
+            );
             tree.fit(&training);
 
             // println!("{:?}", tree);
