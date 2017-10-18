@@ -39,7 +39,12 @@ impl MetricScorer for NDCGScorer {
     }
 
     fn score(&self, labels: &[f64]) -> f64 {
-        self.dcg.score(labels) / self.max_dcg(labels)
+        let max = self.max_dcg(labels);
+        if max.abs() == 0.0 {
+            0.0
+        } else {
+            self.dcg.score(labels) / self.max_dcg(labels)
+        }
     }
 
     fn delta(&self, labels: &[f64]) -> Vec<Vec<f64>> {
@@ -76,6 +81,12 @@ mod test {
         let max_dcg = 15.0 / 2.0_f64.log2() + 7.0 / 3.0_f64.log2() +
             3.0 / 4.0_f64.log2();
         assert_eq!(ndcg.score(&vec![3.0, 2.0, 4.0]), dcg / max_dcg);
+    }
+
+    #[test]
+    fn test_ndcg_score_zeros() {
+        let ndcg = NDCGScorer::new(10);
+        assert_eq!(ndcg.score(&vec![0.0, 0.0, 0.0]), 0.0);
     }
 
     #[test]
