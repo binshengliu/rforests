@@ -477,6 +477,7 @@ impl<'a> TrainingSet<'a> {
 
         let mut query = query.clone();
 
+        // Rank the instances by the scores of our model.
         query.sort_by(|&index1, &index2| {
             // Descending
             self.labels[index2]
@@ -484,8 +485,28 @@ impl<'a> TrainingSet<'a> {
                 .unwrap_or(Ordering::Equal)
         });
 
-        let labels_sorted_by_scores: Vec<Value> =
-            query.iter().map(|&index| self.labels[index].get()).collect();
+        // Organize the original labels by the scores of our
+        // model. For example, we have three instances.
+        //
+        // | Index | Label | Our Score |
+        // |-------+-------+-----------|
+        // |     0 |   5.0 |       2.0 |
+        // |     1 |   4.0 |       5.0 |
+        // |     2 |   3.0 |       4.0 |
+        //
+        // Ranked by our scores
+        //
+        // | Index | Label | Our Score |
+        // |-------+-------+-----------|
+        // |     1 |   4.0 |       5.0 |
+        // |     2 |   3.0 |       4.0 |
+        // |     0 |   5.0 |       2.0 |
+        //
+        // labes_sorted_by_scores: [4.0, 3.0, 5.0];
+        let labels_sorted_by_scores: Vec<Value> = query
+            .iter()
+            .map(|&index| self.dataset[index].label())
+            .collect();
         let metric_delta = metric.delta(&labels_sorted_by_scores);
 
         for (metric_index1, &index1) in query.iter().enumerate() {
