@@ -27,7 +27,8 @@ where
 
     pub fn learn(&self) -> Result<()> {
         let learning_rate = 0.1;
-        let min_leaf_count = 10;
+        let min_samples_per_leaf = 10;
+        let max_leaves = 10;
         let mut ensemble = Ensemble::new();
         let mut training = TrainingSet::from(&self.dataset);
         println!(
@@ -39,7 +40,11 @@ where
         for i in 0..self.trees {
             training.update_lambdas_weights();
 
-            let mut tree = RegressionTree::new(learning_rate, min_leaf_count);
+            let mut tree = RegressionTree::new(
+                learning_rate,
+                max_leaves,
+                min_samples_per_leaf,
+            );
             tree.fit(&training);
             ensemble.push(tree);
 

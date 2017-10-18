@@ -524,8 +524,8 @@ impl std::ops::Deref for DataSet {
 /// A collection type containing a data set. The difference with
 /// DataSet is that this data structure keeps the latest label values
 /// after each training.
-pub struct TrainingSet<'a> {
-    dataset: &'a DataSet,
+pub struct TrainingSet<'d> {
+    dataset: &'d DataSet,
     // Fitting result of the model. We need to update the result at
     // each leaf node.
     model_scores: Vec<Cell<Value>>,
@@ -535,7 +535,7 @@ pub struct TrainingSet<'a> {
     weights: Vec<Value>,
 }
 
-impl<'a> TrainingSet<'a> {
+impl<'d> TrainingSet<'d> {
     /// Returns the number of instances in the training set, also
     /// referred to as its 'length'.
     fn len(&self) -> usize {
@@ -543,7 +543,7 @@ impl<'a> TrainingSet<'a> {
     }
 
     /// Get (label, instance) at given index.
-    fn get(&self, index: usize) -> (Value, &'a Instance) {
+    fn get(&self, index: usize) -> (Value, &'d Instance) {
         (self.model_scores[index].get(), &self.dataset[index])
     }
 
@@ -565,14 +565,14 @@ impl<'a> TrainingSet<'a> {
     }
 
     /// Returns an iterator over the labels in the data set.
-    pub fn iter(&'a self) -> impl Iterator<Item = (Value, &Instance)> + 'a {
+    pub fn iter(&'d self) -> impl Iterator<Item = (Value, &Instance)> + 'd {
         self.model_scores.iter().map(|celled| celled.get()).zip(
             self.dataset.iter(),
         )
     }
 
     /// Returns an iterator over the labels in the data set.
-    pub fn model_score_iter(&'a self) -> impl Iterator<Item = Value> + 'a {
+    pub fn model_score_iter(&'d self) -> impl Iterator<Item = Value> + 'd {
         self.model_scores.iter().map(|celled| celled.get())
     }
 
@@ -711,8 +711,8 @@ impl<'a> TrainingSet<'a> {
     }
 }
 
-impl<'a> From<&'a DataSet> for TrainingSet<'a> {
-    fn from(dataset: &'a DataSet) -> TrainingSet<'a> {
+impl<'d> From<&'d DataSet> for TrainingSet<'d> {
+    fn from(dataset: &'d DataSet) -> TrainingSet<'d> {
         let len = dataset.len();
         let mut model_scores = Vec::with_capacity(len);
         model_scores.resize(len, Cell::new(0.0));
@@ -730,15 +730,15 @@ impl<'a> From<&'a DataSet> for TrainingSet<'a> {
 }
 
 /// A collection type containing part of a data set.
-pub struct TrainingSample<'a> {
+pub struct TrainingSample<'t, 'd: 't> {
     /// Original data
-    training: &'a TrainingSet<'a>,
+    training: &'t TrainingSet<'d>,
 
     /// Indices into training
     indices: Vec<usize>,
 }
 
-impl<'a> TrainingSample<'a> {
+impl<'t, 'd: 't> TrainingSample<'t, 'd> {
     /// Returns the number of instances in the data set sample, also
     /// referred to as its 'length'.
     pub fn len(&self) -> usize {
@@ -751,7 +751,7 @@ impl<'a> TrainingSample<'a> {
     /// The iterator returned yields pairs (index, value, instance),
     /// where `index` is the index of Instance, `value` is the label
     /// value, and `instance` is the reference to the Instance.
-    pub fn iter(&'a self) -> impl Iterator<Item = (Id, Value, &Instance)> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Id, Value, &Instance)> + 'a{
         self.indices.iter().map(move |&index| {
             let (label, instance) = self.training.get(index);
             (index, label, instance)
@@ -760,18 +760,18 @@ impl<'a> TrainingSample<'a> {
 
     /// Returns an iterator over the feature ids in the data set
     /// sample.
-    pub fn fid_iter(&'a self) -> impl Iterator<Item = Id> + 'a {
+    pub fn fid_iter<'a>(&'a self) -> impl Iterator<Item = Id> + 'a {
         self.training.fid_iter()
     }
 
     /// Returns an iterator over the labels in the data set sample.
-    pub fn label_iter(&'a self) -> impl Iterator<Item = Value> + 'a {
+    pub fn label_iter<'a>(&'a self) -> impl Iterator<Item = Value> + 'a {
         self.iter().map(|(_index, label, _ins)| label)
     }
 
     /// Returns an iterator over the values of the given feature in
     /// the data set sample.
-    pub fn value_iter(&'a self, fid: Id) -> impl Iterator<Item = Value> + 'a {
+    pub fn value_iter<'a>(&'a self, fid: Id) -> impl Iterator<Item = Value> + 'a {
         self.iter().map(move |(_index, _label, ins)| ins.value(fid))
     }
 
@@ -812,7 +812,7 @@ impl<'a> TrainingSample<'a> {
     pub fn split(
         &self,
         min_leaf_count: usize,
-    ) -> Option<(Id, Value, f64, TrainingSample, TrainingSample)> {
+    ) -> Option<(Id, Value, f64, TrainingSample<'t, 'd>, TrainingSample<'t, 'd>)> {
         assert!(min_leaf_count > 0);
         // (fid, threshold, s)
         let mut splits: Vec<(Id, Value, f64)> = Vec::new();
@@ -855,8 +855,8 @@ impl<'a> TrainingSample<'a> {
     }
 }
 
-impl<'a> From<&'a TrainingSet<'a>> for TrainingSample<'a> {
-    fn from(training: &'a TrainingSet) -> TrainingSample<'a> {
+impl<'t, 'd> From<&'t TrainingSet<'d>> for TrainingSample<'t, 'd> {
+    fn from(training: &'t TrainingSet<'d>) -> TrainingSample<'t, 'd> {
         let len = training.len();
         let indices: Vec<usize> = (0..len).collect();
         TrainingSample {
@@ -866,7 +866,7 @@ impl<'a> From<&'a TrainingSet<'a>> for TrainingSample<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for TrainingSample<'a> {
+impl<'t, 'd> std::fmt::Display for TrainingSample<'t, 'd> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for &index in self.indices.iter() {
             let (label, instance) = self.training.get(index);

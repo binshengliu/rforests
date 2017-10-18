@@ -1,6 +1,8 @@
 use std;
 use train::dataset::*;
 use util::*;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 /// A node in the regression tree.
 struct Node {
@@ -25,8 +27,12 @@ impl Node {
 
     /// Split on the data set sample and creates children, until self
     /// becomes the leaf node.
-    pub fn split(&mut self, sample: TrainingSample, min_leaf_count: usize) {
-        let split_result = sample.split(min_leaf_count);
+    pub fn split(
+        &mut self,
+        sample: TrainingSample,
+        min_samples_per_leaf: usize,
+    ) {
+        let split_result = sample.split(min_samples_per_leaf);
         if split_result.is_none() {
             let value = sample.newton_output();
             self.output = Some(value);
@@ -41,10 +47,10 @@ impl Node {
         self.threshold = Some(threshold);
 
         let mut left = Node::new();
-        left.split(left_sample, min_leaf_count);
+        left.split(left_sample, min_samples_per_leaf);
 
         let mut right = Node::new();
-        right.split(right_sample, min_leaf_count);
+        right.split(right_sample, min_samples_per_leaf);
 
         self.left = Some(Box::new(left));
         self.right = Some(Box::new(right));
@@ -82,32 +88,79 @@ impl std::fmt::Debug for Node {
 #[derive(Debug)]
 pub struct RegressionTree {
     learning_rate: f64,
-    min_leaf_count: usize,
-    root: Option<Node>,
+    // Minimal count of samples per leaf.
+    min_samples_per_leaf: usize,
+    max_leaves: usize,
+    root: Option<Rc<RefCell<Node>>>,
 }
 
 impl RegressionTree {
-    /// Create a new regression tree, with at least min_leaf_count
+    /// Create a new regression tree, with at least min_samples_per_leaf
     /// training instances on the leaves.
-    pub fn new(learning_rate: f64, min_leaf_count: usize) -> RegressionTree {
+    pub fn new(
+        learning_rate: f64,
+        max_leaves: usize,
+        min_samples_per_leaf: usize,
+    ) -> RegressionTree {
         RegressionTree {
             learning_rate: learning_rate,
-            min_leaf_count: min_leaf_count,
+            min_samples_per_leaf: min_samples_per_leaf,
+            max_leaves: max_leaves,
             root: None,
         }
     }
 
+    fn create_node() -> Node {
+        Node::new()
+    }
+
     /// Fit to a training.
     pub fn fit(&mut self, training: &TrainingSet) {
-        let mut root = Node::new();
         let sample = TrainingSample::from(training);
-        root.split(sample, self.min_leaf_count);
-        self.root = Some(root);
+        let mut leaves = 0;
+
+        let root = Rc::new(RefCell::new(Node::new()));
+        self.root = Some(root.clone());
+
+        let mut queue: Vec<(Rc<RefCell<Node>>, TrainingSample)> = Vec::new();
+        queue.push((root.clone(), sample));
+
+        while !queue.is_empty() {
+            let (node, sample) = queue.remove(0);
+
+            // We have reached leaves count limitation.
+            if 1 + leaves + queue.len() >= self.max_leaves {
+                let value = sample.newton_output();
+                node.borrow_mut().output = Some(value);
+                sample.update_output(value);
+                continue;
+            }
+
+            let split_result = sample.split(self.min_samples_per_leaf);
+            if split_result.is_none() {
+                let value = sample.newton_output();
+                node.borrow_mut().output = Some(value);
+                sample.update_output(value);
+                return;
+            } else {
+                let (fid, threshold, _s_value, left_sample, right_sample) =
+                    split_result.unwrap();
+
+                let mut node = node.borrow_mut();
+                node.fid = Some(fid);
+                node.threshold = Some(threshold);
+                let left = Rc::new(RefCell::new(Node::new()));
+                let right = Rc::new(RefCell::new(Node::new()));
+
+                queue.push((left.clone(), left_sample));
+                queue.push((right.clone(),right_sample));
+            }
+        }
     }
 
     /// Evaluate an input.
     pub fn evaluate(&self, instance: &Instance) -> f64 {
-        self.root.as_ref().unwrap().evaluate(instance) * self.learning_rate
+        self.root.as_ref().unwrap().borrow().evaluate(instance) * self.learning_rate
     }
 }
 
@@ -166,7 +219,8 @@ mod test {
         let mut training = TrainingSet::from(&dataset);
         // training.init_model_scores(&[3.0, 2.0]);
         let learning_rate = 0.1;
-        let min_leaf_count = 1;
+        let min_samples_per_leaf = 1;
+        let max_leaves = 10;
 
         for _ in 0..10 {
             training.update_lambdas_weights();
@@ -174,7 +228,8 @@ mod test {
             // println!("{:?}", training.lambdas);
             // println!("{:?}", training.weights);
 
-            let mut tree = RegressionTree::new(learning_rate, min_leaf_count);
+            let mut tree =
+                RegressionTree::new(learning_rate, max_leaves, min_samples_per_leaf);
             tree.fit(&training);
 
             // println!("{:?}", tree);
