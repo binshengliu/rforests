@@ -257,6 +257,13 @@ pub struct DataSet {
 
 impl DataSet {
     /// Create an empty DataSet.
+    /// # Examples
+    ///
+    /// ```
+    /// use rforests::train::dataset::DataSet;
+    ///
+    /// let mut dataset = DataSet::new(3);
+    /// ```
     pub fn new(max_bins: usize) -> DataSet {
         DataSet {
             nfeatures: 0,
@@ -323,7 +330,7 @@ impl DataSet {
 
     /// Load data from an Iterator.
     ///
-    /// # Examples:
+    /// # Examples
     ///
     /// ```
     /// use rforests::train::dataset::DataSet;
@@ -364,21 +371,100 @@ impl DataSet {
 
     /// Returns the number of instances in the data set, also referred
     /// to as its 'length'.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rforests::train::dataset::DataSet;
+    ///
+    /// let data = vec![
+    ///     // label, qid, values
+    ///     (3.0, 1, vec![5.0]),
+    ///     (2.0, 2, vec![7.0]),
+    ///     (3.0, 3, vec![3.0]),
+    /// ];
+    ///
+    /// let mut dataset = DataSet::new(3);
+    /// dataset.from_iter(data.into_iter());
+    ///
+    /// assert_eq!(dataset.len(), 3);
+    /// ```
     pub fn len(&self) -> usize {
         self.instances.len()
     }
 
     /// Returns an iterator over the feature ids in the data set.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rforests::train::dataset::DataSet;
+    ///
+    /// let data = vec![
+    ///     // label, qid, values
+    ///     (3.0, 1, vec![5.0, 6.0]),
+    /// ];
+    ///
+    /// let mut dataset = DataSet::new(3);
+    /// dataset.from_iter(data.into_iter());
+    ///
+    /// let mut iter = dataset.fid_iter();
+    /// assert_eq!(iter.next(), Some(1));
+    /// assert_eq!(iter.next(), Some(2));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     pub fn fid_iter(&self) -> impl Iterator<Item = Id> {
         (1..(self.nfeatures + 1)).map(|i| i)
     }
 
     /// Returns an iterator over the labels in the data set.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rforests::train::dataset::DataSet;
+    ///
+    /// let data = vec![
+    ///     // label, qid, values
+    ///     (3.0, 1, vec![5.0, 6.0]),
+    ///     (2.0, 2, vec![7.0, 8.0]),
+    /// ];
+    ///
+    /// let mut dataset = DataSet::new(3);
+    /// dataset.from_iter(data.into_iter());
+    ///
+    /// let mut iter = dataset.label_iter();
+    /// assert_eq!(iter.next(), Some(3.0));
+    /// assert_eq!(iter.next(), Some(2.0));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     pub fn label_iter<'a>(&'a self) -> impl Iterator<Item = Value> + 'a {
         self.instances.iter().map(|instance| instance.label)
     }
 
     /// Returns an iterator over the queries' indices.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rforests::train::dataset::DataSet;
+    ///
+    /// let data = vec![
+    ///     // label, qid, values
+    ///     (3.0, 1, vec![5.0]), // 0
+    ///     (2.0, 1, vec![7.0]), // 1
+    ///     (3.0, 2, vec![3.0]), // 2
+    ///     (1.0, 5, vec![2.0]), // 3
+    /// ];
+    ///
+    /// let mut dataset = DataSet::new(3);
+    /// dataset.from_iter(data.into_iter());
+    ///
+    /// let mut iter = dataset.query_iter();
+    /// assert_eq!(iter.next(), Some((1, vec![0, 1])));
+    /// assert_eq!(iter.next(), Some((2, vec![2])));
+    /// assert_eq!(iter.next(), Some((5, vec![3])));
+    /// ```
     pub fn query_iter(&self) -> QueryIter {
         QueryIter {
             dataset: self,
@@ -965,32 +1051,5 @@ mod tests {
         assert_eq!(threshold, 3.0 + 2.0 / 3.0);
 
         assert!(left.split(2).is_none());
-    }
-
-    #[test]
-    fn test_dataset_group_by_query() {
-        // (label, qid, feature_values)
-        let data = vec![
-            (3.0, 1, vec![5.0]), // 0
-            (2.0, 1, vec![7.0]), // 1
-            (3.0, 2, vec![3.0]), // 2
-            (1.0, 5, vec![2.0]), // 3
-            (0.0, 5, vec![1.0]), // 4
-            (2.0, 7, vec![8.0]), // 5
-            (4.0, 7, vec![9.0]), // 6
-            (1.0, 6, vec![4.0]), // 7
-            (0.0, 6, vec![6.0]), // 8
-        ];
-
-        let mut dataset = DataSet::new(3);
-        dataset.from_iter(data.into_iter());
-
-        let mut iter = dataset.query_iter();
-        assert_eq!(iter.next(), Some((1, vec![0, 1])));
-        assert_eq!(iter.next(), Some((2, vec![2])));
-        assert_eq!(iter.next(), Some((5, vec![3, 4])));
-        assert_eq!(iter.next(), Some((7, vec![5, 6])));
-        assert_eq!(iter.next(), Some((6, vec![7, 8])));
-        assert_eq!(iter.next(), None);
     }
 }
