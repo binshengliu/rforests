@@ -58,7 +58,7 @@ mod test {
         let mut dataset = DataSet::new(max_bins);
         dataset.load(f).unwrap();
 
-        let trees = 10;
+        let trees = 1;
         let ndcg = NDCGScorer::new(10);
         let lambdamart = LambdaMART::new(dataset, trees, ndcg);
         lambdamart.init().unwrap();
