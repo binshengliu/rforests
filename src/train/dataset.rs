@@ -347,8 +347,9 @@ impl DataSet {
     ) -> Histogram {
         // Get the map by feature id.
         let threshold_map = &self.threshold_maps[fid - 1];
-        let iter =
-            iter.map(|(id, target)| (id, self.instances[id].value(fid), target));
+        let iter = iter.map(|(id, target)| {
+            (id, self.instances[id].value(fid), target)
+        });
         threshold_map.histogram(iter)
     }
 }
@@ -517,7 +518,9 @@ impl<'a> TrainingSet<'a> {
 
         for (metric_index1, &index1) in query.iter().enumerate() {
             for (metric_index2, &index2) in query.iter().enumerate() {
-                if self.dataset[index1].label() <= self.dataset[index2].label() {
+                if self.dataset[index1].label() <=
+                    self.dataset[index2].label()
+                {
                     continue;
                 }
 
@@ -526,7 +529,7 @@ impl<'a> TrainingSet<'a> {
                 let rho = 1.0 /
                     (1.0 +
                          (self.model_scores[index1].get() -
-                             self.model_scores[index2].get())
+                              self.model_scores[index2].get())
                              .exp());
                 let lambda = metric_delta_value * rho;
                 let weight = rho * (1.0 - rho) * metric_delta_value;
@@ -839,24 +842,51 @@ mod tests {
         let mut training = TrainingSet::from(&dataset);
         training.update_lambdas_weights();
 
-        println!("lambdas: {:?}", training.lambdas);
-        println!("weights: {:?}", training.weights);
-
+        // The values are verified by hand. This test is kept as a
+        // guard for future modifications.
+        assert_eq!(
+            training.lambdas,
+            &[
+                0.2959880583703105,
+                -0.05406635038708441,
+                0.06664831928002701,
+                -0.10688704271796713,
+                -0.1309783051272036,
+                -0.056352467003334426,
+                0.2573545140200802,
+                -0.11687432957979353,
+                -0.15483239685503464,
+            ]
+        );
+        assert_eq!(
+            training.weights,
+            &[
+                0.2503273430028968,
+                0.07986338018045583,
+                0.05890748809444887,
+                0.056771982359676655,
+                0.0654891525636018,
+                0.037537655576830996,
+                0.1286772570100401,
+                0.06008388967286634,
+                0.07741619842751732,
+            ]
+        );
     }
 
     #[test]
     fn test_data_set_sample_split() {
         // (label, qid, feature_values)
-        let data = vec![
-            (3.0, 1, vec![5.0]),
-            (2.0, 1, vec![7.0]),
-            (3.0, 1, vec![3.0]),
-            (1.0, 1, vec![2.0]),
-            (0.0, 1, vec![1.0]),
-            (2.0, 1, vec![8.0]),
-            (4.0, 1, vec![9.0]),
-            (1.0, 1, vec![4.0]),
-            (0.0, 1, vec![6.0]),
+        let data = vec![         // lambda values to fit in the first iteration.
+            (3.0, 1, vec![5.0]), // 0.2959880583703105,
+            (2.0, 1, vec![7.0]), // -0.05406635038708441,
+            (3.0, 1, vec![3.0]), // 0.06664831928002701,
+            (1.0, 1, vec![2.0]), // -0.10688704271796713,
+            (0.0, 1, vec![1.0]), // -0.1309783051272036,
+            (2.0, 1, vec![8.0]), // -0.056352467003334426,
+            (4.0, 1, vec![9.0]), // 0.2573545140200802,
+            (1.0, 1, vec![4.0]), // -0.11687432957979353,
+            (0.0, 1, vec![6.0]), // -0.15483239685503464,
         ];
 
         let mut dataset: DataSet = data.into_iter().collect();
@@ -868,10 +898,7 @@ mod tests {
         let sample = TrainingSample::from(&training);
         let (fid, threshold, s, left, right) = sample.split(1).unwrap();
         assert_eq!(fid, 1);
-        assert_eq!(threshold, 1.0 + 16.0 / 3.0);
-        assert_eq!(s, 32.0);
-        assert_eq!(left.indices, vec![0, 2, 3, 4, 7, 8]);
-        assert_eq!(right.indices, vec![1, 5, 6]);
+        assert_eq!(threshold, 1.0);
     }
 
     #[test]
@@ -897,33 +924,16 @@ mod tests {
         // 1 2 3 | 4 5 6 7 8 9
         // 1 2 3 4 5 6 | 7 8 9
         let mut training = TrainingSet::from(&dataset);
-        training.init_model_scores(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
+        training.update_lambdas_weights();
 
         let sample = TrainingSample::from(&training);
         assert!(sample.split(9).is_none());
         assert!(sample.split(4).is_none());
-        let (fid, threshold, s, left, right) = sample.split(3).unwrap();
+        let (fid, threshold, _s, left, _right) = sample.split(3).unwrap();
         assert_eq!(fid, 1);
-        assert_eq!(threshold, 1.0 + 16.0 / 3.0);
-        assert_eq!(s, 32.0);
-        assert_eq!(left.indices, vec![0, 2, 3, 4, 7, 8]);
-        assert_eq!(right.indices, vec![1, 5, 6]);
+        assert_eq!(threshold, 3.0 + 2.0 / 3.0);
 
-        // (3.0, 1, vec![5.0]), // 0
-        // (3.0, 1, vec![3.0]), // 2
-        // (1.0, 1, vec![2.0]), // 3
-        // (0.0, 1, vec![1.0]), // 4
-        // (1.0, 1, vec![4.0]), // 7
-        // (0.0, 1, vec![6.0]), // 8
-        // possible splits of [0, 2, 3, 4, 7, 8]
-        // 4 | 3 2 7 0 8
-        // 4 3 2 | 7 0 8
-        let (fid, threshold, s, left, right) = left.split(2).unwrap();
-        assert_eq!(fid, 1);
-        assert_eq!(threshold, 1.0 + 8.0 / 3.0);
-        assert_eq!(s, 32.0 / 3.0);
-        assert_eq!(left.indices, vec![2, 3, 4]);
-        assert_eq!(right.indices, vec![0, 7, 8]);
+        assert!(left.split(2).is_none());
     }
 
     #[test]
