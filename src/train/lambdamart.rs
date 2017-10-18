@@ -28,7 +28,7 @@ impl LambdaMART {
         let mut ensemble = Ensemble::new();
         let mut training = TrainingSet::from(&self.dataset);
         for _i in 0..ntrees {
-            training.update_pseudo_response();
+            training.update_lambdas_weights();
 
             let mut tree = RegressionTree::new(learning_rate, min_leaf_count);
             tree.fit(&training);

@@ -144,16 +144,14 @@ mod test {
             (0.0, 1, vec![6.0]),
         ];
 
+        let lambdas = vec![3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0];
+
         let mut dataset: DataSet = data.into_iter().collect();
         dataset.generate_thresholds(3);
 
-        // The label values are zero by default.
-        let mut training = TrainingSet::from(&dataset);
-        training.init_labels(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
+        let histogram =
+            dataset.feature_histogram(1, lambdas.iter().cloned().enumerate());
 
-        let sample = TrainingSample::from(&training);
-
-        let histogram = sample.feature_histogram(1);
         assert_eq!(
             histogram.bins,
             vec![

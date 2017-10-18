@@ -337,7 +337,9 @@ impl DataSet {
         indices
     }
 
-    /// Generate histogram for the specified instances.
+    /// Generate histogram for the specified instances. `fid`
+    /// specifies the feature used to split into histogram
+    /// bins. `(index of the instance, value to do statistics)`.
     pub fn feature_histogram<I: Iterator<Item = (Id, Value)>>(
         &self,
         fid: Id,
@@ -346,7 +348,7 @@ impl DataSet {
         // Get the map by feature id.
         let threshold_map = &self.threshold_maps[fid - 1];
         let iter =
-            iter.map(|(id, label)| (id, self.instances[id].value(fid), label));
+            iter.map(|(id, target)| (id, self.instances[id].value(fid), target));
         threshold_map.histogram(iter)
     }
 }
@@ -385,7 +387,7 @@ pub struct TrainingSet<'a> {
     dataset: &'a DataSet,
     // Fitting result of the model. We need to update the result at
     // each leaf node.
-    labels: Vec<Cell<Value>>,
+    model_scores: Vec<Cell<Value>>,
     // Gradients, or lambdas.
     lambdas: Vec<Value>,
     // Newton step weights
@@ -396,12 +398,12 @@ impl<'a> TrainingSet<'a> {
     /// Returns the number of instances in the training set, also
     /// referred to as its 'length'.
     fn len(&self) -> usize {
-        self.labels.len()
+        self.model_scores.len()
     }
 
     /// Get (label, instance) at given index.
     fn get(&self, index: usize) -> (Value, &'a Instance) {
-        (self.labels[index].get(), &self.dataset[index])
+        (self.model_scores[index].get(), &self.dataset[index])
     }
 
     /// Get (lambda, weight) at given index.
@@ -414,62 +416,66 @@ impl<'a> TrainingSet<'a> {
         self.dataset.fid_iter()
     }
 
-    pub fn init_labels(&mut self, values: &[Value]) {
+    pub fn init_model_scores(&mut self, values: &[Value]) {
         assert_eq!(self.len(), values.len());
-        for (label, &value) in self.labels.iter_mut().zip(values.iter()) {
-            label.set(value);
+        for (score, &value) in self.model_scores.iter_mut().zip(values.iter()) {
+            score.set(value);
         }
     }
 
     /// Returns an iterator over the labels in the data set.
     pub fn iter(&'a self) -> impl Iterator<Item = (Value, &Instance)> + 'a {
-        self.labels.iter().map(|celled| celled.get()).zip(
-            self.dataset
-                .iter(),
+        self.model_scores.iter().map(|celled| celled.get()).zip(
+            self.dataset.iter(),
         )
     }
 
     /// Returns an iterator over the labels in the data set.
-    pub fn label_iter(&'a self) -> impl Iterator<Item = Value> + 'a {
-        self.labels.iter().map(|celled| celled.get())
+    pub fn model_score_iter(&'a self) -> impl Iterator<Item = Value> + 'a {
+        self.model_scores.iter().map(|celled| celled.get())
     }
 
     /// Returns the label value at given index.
-    pub fn label(&self, index: usize) -> f64 {
-        self.labels[index].get()
+    pub fn model_score(&self, index: usize) -> f64 {
+        self.model_scores[index].get()
     }
 
     /// Adds delta to each label specified in `indices`.
     pub fn update_result(&self, indices: &[Id], delta: Value) {
-        assert!(indices.len() <= self.labels.len());
+        assert!(indices.len() <= self.model_scores.len());
         for &index in indices.iter() {
-            let celled_label = &self.labels[index];
-            celled_label.set(celled_label.get() + delta);
+            let celled_score = &self.model_scores[index];
+            celled_score.set(celled_score.get() + delta);
         }
     }
 
-    /// Generate histogram for the specified instances.
+    /// Generate histogram for the specified instances. The input
+    /// iterator specifies the indices of instance that we want to
+    /// generate histogram on. For a training data set, the histogram
+    /// is used to make statistics of the lambda values, which is
+    /// actually the target value that we aims to fit to in the
+    /// current iteration of learning.
     pub fn feature_histogram<I: Iterator<Item = Id>>(
         &self,
         fid: Id,
         iter: I,
     ) -> Histogram {
         // Get the map by feature id.
-        let iter = iter.map(|id| (id, self.label(id)));
+        let iter = iter.map(|id| (id, self.lambdas[id]));
         self.dataset.feature_histogram(fid, iter)
     }
 
     /// Updates the lambda and weight for each instance.
-    pub fn update_pseudo_response(&mut self) {
+    pub fn update_lambdas_weights(&mut self) {
         let ndcg = NDCGScorer::new(10);
 
         for (_qid, query) in self.dataset.query_iter() {
-            self.update_lambda_weight(&query, &ndcg);
+            self.update_lambda_weight_by_query(&query, &ndcg);
         }
     }
 
     /// Updates the lambda and weight for each instance grouped by query.
-    pub fn update_lambda_weight<S>(&mut self, query: &Vec<Id>, metric: &S)
+    fn update_lambda_weight_by_query<S>(&mut self, query: &Vec<Id>, metric: &S)
     where
         S: MetricScorer,
     {
@@ -480,8 +486,8 @@ impl<'a> TrainingSet<'a> {
         // Rank the instances by the scores of our model.
         query.sort_by(|&index1, &index2| {
             // Descending
-            self.labels[index2]
-                .partial_cmp(&self.labels[index1])
+            self.model_scores[index2]
+                .partial_cmp(&self.model_scores[index1])
                 .unwrap_or(Ordering::Equal)
         });
 
@@ -511,7 +517,7 @@ impl<'a> TrainingSet<'a> {
 
         for (metric_index1, &index1) in query.iter().enumerate() {
             for (metric_index2, &index2) in query.iter().enumerate() {
-                if self.labels[index1] <= self.labels[index2] {
+                if self.dataset[index1].label() <= self.dataset[index2].label() {
                     continue;
                 }
 
@@ -519,8 +525,8 @@ impl<'a> TrainingSet<'a> {
                     metric_delta[metric_index1][metric_index2].abs();
                 let rho = 1.0 /
                     (1.0 +
-                         (self.labels[index1].get() -
-                             self.labels[index2].get())
+                         (self.model_scores[index1].get() -
+                             self.model_scores[index2].get())
                              .exp());
                 let lambda = metric_delta_value * rho;
                 let weight = rho * (1.0 - rho) * metric_delta_value;
@@ -537,15 +543,15 @@ impl<'a> TrainingSet<'a> {
 impl<'a> From<&'a DataSet> for TrainingSet<'a> {
     fn from(dataset: &'a DataSet) -> TrainingSet<'a> {
         let len = dataset.len();
-        let mut labels = Vec::with_capacity(len);
-        labels.resize(len, Cell::new(0.0));
+        let mut model_scores = Vec::with_capacity(len);
+        model_scores.resize(len, Cell::new(0.0));
         let mut lambdas = Vec::with_capacity(len);
         lambdas.resize(len, 0.0);
         let mut weights = Vec::with_capacity(len);
         weights.resize(len, 0.0);
         TrainingSet {
             dataset: dataset,
-            labels: labels,
+            model_scores: model_scores,
             lambdas: lambdas,
             weights: weights,
         }
@@ -813,6 +819,32 @@ mod tests {
     }
 
     #[test]
+    fn test_data_set_lambda_weight() {
+        // (label, qid, feature_values)
+        let data = vec![
+            (3.0, 1, vec![5.0]),
+            (2.0, 1, vec![7.0]),
+            (3.0, 1, vec![3.0]),
+            (1.0, 1, vec![2.0]),
+            (0.0, 1, vec![1.0]),
+            (2.0, 1, vec![8.0]),
+            (4.0, 1, vec![9.0]),
+            (1.0, 1, vec![4.0]),
+            (0.0, 1, vec![6.0]),
+        ];
+
+        let mut dataset: DataSet = data.into_iter().collect();
+        dataset.generate_thresholds(3);
+
+        let mut training = TrainingSet::from(&dataset);
+        training.update_lambdas_weights();
+
+        println!("lambdas: {:?}", training.lambdas);
+        println!("weights: {:?}", training.weights);
+
+    }
+
+    #[test]
     fn test_data_set_sample_split() {
         // (label, qid, feature_values)
         let data = vec![
@@ -831,7 +863,7 @@ mod tests {
         dataset.generate_thresholds(3);
 
         let mut training = TrainingSet::from(&dataset);
-        training.init_labels(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
+        training.update_lambdas_weights();
 
         let sample = TrainingSample::from(&training);
         let (fid, threshold, s, left, right) = sample.split(1).unwrap();
@@ -865,7 +897,7 @@ mod tests {
         // 1 2 3 | 4 5 6 7 8 9
         // 1 2 3 4 5 6 | 7 8 9
         let mut training = TrainingSet::from(&dataset);
-        training.init_labels(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
+        training.init_model_scores(&[3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0]);
 
         let sample = TrainingSample::from(&training);
         assert!(sample.split(9).is_none());
