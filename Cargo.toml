@@ -3,6 +3,10 @@ name = "rforests"
 version = "0.1.0"
 authors = ["Binsheng Liu <lbsx@users.noreply.github.com>"]
 
+[[bin]]
+name = "rforests"
+doc = false
+
 [dependencies]
 env_logger = "0.4.3"
 log = "0.3.8"
