@@ -20,7 +20,7 @@ pub const USAGE: &'static str = "
 Train a leaner
 
 Usage:
-    rforests train [--ranking] --config <file> --train <file> --validation <file> --output <file>
+    rforests train [--ranking] [--config <file>] --train <file> [--validation <file>] [--output <file>]
     rforests train (-h | --help)
 
 Options:
@@ -34,5 +34,25 @@ Options:
 
 pub fn execute(args: Args) -> Result<()> {
     debug!("rforests train args: {:?}", args);
+    lambdamart(&args.flag_train)?;
+    Ok(())
+}
+
+pub fn lambdamart(path: &str) -> Result<()> {
+    use std::fs::File;
+    use train::dataset::*;
+    use train::lambdamart::*;
+    use metric::*;
+
+    let max_bins = 256;
+    let f = File::open(path)?;
+    let mut dataset = DataSet::new(max_bins);
+    dataset.load(f).unwrap();
+
+    let trees = 10;
+    let ndcg = NDCGScorer::new(10);
+    let lambdamart = LambdaMART::new(dataset, trees, ndcg);
+    lambdamart.init().unwrap();
+    lambdamart.learn().unwrap();
     Ok(())
 }
