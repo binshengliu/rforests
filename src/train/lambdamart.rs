@@ -5,19 +5,26 @@ use metric::*;
 
 pub struct LambdaMART<M> {
     dataset: DataSet,
-    trees: usize,
-    metric: M,
+    config: Config<M>,
+}
+
+pub struct Config<M>
+{
+    pub trees: usize,
+    pub learning_rate: f64,
+    pub max_leaves: usize,
+    pub min_samples_per_leaf: usize,
+    pub metric: M,
 }
 
 impl<M> LambdaMART<M>
 where
     M: MetricScorer,
 {
-    pub fn new(dataset: DataSet, trees: usize, metric: M) -> LambdaMART<M> {
+    pub fn new(dataset: DataSet, config: Config<M>) -> LambdaMART<M> {
         LambdaMART {
             dataset: dataset,
-            trees: trees,
-            metric: metric,
+            config: config,
         }
     }
 
@@ -34,10 +41,10 @@ where
         println!(
             "{:<7} | {:>9} | {:>9}",
             "#iter",
-            self.metric.name() + "-T",
-            self.metric.name() + "-V"
+            self.config.metric.name() + "-T",
+            self.config.metric.name() + "-V"
         );
-        for i in 0..self.trees {
+        for i in 0..self.config.trees {
             training.update_lambdas_weights();
 
             let mut tree = RegressionTree::new(
@@ -48,7 +55,7 @@ where
             tree.fit(&training);
             ensemble.push(tree);
 
-            let score = training.evaluate(&self.metric);
+            let score = training.evaluate(&self.config.metric);
 
             println!("{:<7} | {:>9.4} | {:>9.4}", i, score, "");
         }

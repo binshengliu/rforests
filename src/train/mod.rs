@@ -49,9 +49,14 @@ pub fn lambdamart(path: &str) -> Result<()> {
     let mut dataset = DataSet::new(max_bins);
     dataset.load(f).unwrap();
 
-    let trees = 10;
-    let ndcg = NDCGScorer::new(10);
-    let lambdamart = LambdaMART::new(dataset, trees, ndcg);
+    let config = Config {
+        trees: 10,
+        learning_rate: 0.1,
+        max_leaves: 16,
+        min_samples_per_leaf: 1,
+        metric: NDCGScorer::new(10),
+    };
+    let lambdamart = LambdaMART::new(dataset, config);
     lambdamart.init().unwrap();
     lambdamart.learn().unwrap();
     Ok(())
