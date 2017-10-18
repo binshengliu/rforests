@@ -676,6 +676,34 @@ impl<'a> TrainingSet<'a> {
             }
         }
     }
+
+    pub fn evaluate<S>(&self, metric: &S) -> f64
+    where
+        S: MetricScorer,
+    {
+        let mut score = 0.0;
+        let mut count = 0;
+        for (_qid, mut indices) in self.dataset.query_iter() {
+            // Sort the indices by the score of the model, rank the
+            // query based on the scores, then measure the output.
+
+            indices.sort_by(|&index1, &index2| {
+                self.model_score(index2)
+                    .partial_cmp(&self.model_score(index1))
+                    .unwrap()
+            });
+
+            let labels: Vec<Value> = indices
+                .iter()
+                .map(|&index| self.dataset[index].label())
+                .collect();
+
+            count += 1;
+            score += metric.score(&labels);
+        }
+
+        score / count as f64
+    }
 }
 
 impl<'a> From<&'a DataSet> for TrainingSet<'a> {
