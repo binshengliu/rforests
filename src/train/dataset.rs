@@ -249,16 +249,19 @@ impl<'a> Iterator for QueryIter<'a> {
 /// structure that its label values get updated after each training.
 pub struct DataSet {
     nfeatures: usize,
+    // When making histograms, at most how many bins to split.
+    max_bins: usize,
     instances: Vec<Instance>,
     threshold_maps: Vec<ThresholdMap>,
 }
 
 impl DataSet {
     /// Create an empty DataSet.
-    pub fn new(instances: Vec<Instance>, nfeatures: usize) -> DataSet {
+    pub fn new(max_bins: usize) -> DataSet {
         DataSet {
-            nfeatures: nfeatures,
-            instances: instances,
+            nfeatures: 0,
+            max_bins: max_bins,
+            instances: Vec::new(),
             threshold_maps: Vec::new(),
         }
     }
@@ -268,19 +271,38 @@ impl DataSet {
     /// order. But I haven't come up with a good workaround to support
     /// FromIterator. Basically, this is a issue how we customize the
     /// grouping of the data.
-    pub fn generate_thresholds(&mut self, max_bin: usize) {
+    fn generate_thresholds(&mut self) {
         for fid in self.fid_iter() {
             let values: Vec<Value> = self.instances
                 .iter()
                 .map(|instance| instance.value(fid))
                 .collect();
-            let map = ThresholdMap::new(values, max_bin);
+            let map = ThresholdMap::new(values, self.max_bins);
             self.threshold_maps.push(map);
         }
     }
 
     /// Load data set from a reader.
-    pub fn load<R>(reader: R) -> Result<DataSet>
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rforests::train::dataset::DataSet;
+    ///
+    /// let s = "3.0 qid:1 1:5.0
+    /// 2.0 qid:2 1:7.0
+    /// 3.0 qid:3 1:3.0";
+    ///
+    /// let mut dataset = DataSet::new(3);
+    /// dataset.load(::std::io::Cursor::new(s)).unwrap();
+    ///
+    /// assert_eq!(dataset[0].qid(), 1);
+    /// assert_eq!(dataset[0].label(), 3.0);
+    /// assert_eq!(dataset[0].value(1), 5.0);
+    /// assert_eq!(dataset[1].qid(), 2);
+    /// assert_eq!(dataset[2].qid(), 3);
+    /// ```
+    pub fn load<R>(&mut self, reader: R) -> Result<()>
     where
         R: ::std::io::Read,
     {
@@ -293,7 +315,51 @@ impl DataSet {
             instances.push(instance);
         }
 
-        Ok(DataSet::new(instances, nfeatures))
+        self.instances = instances;
+        self.nfeatures = nfeatures;
+        self.generate_thresholds();
+        Ok(())
+    }
+
+    /// Load data from an Iterator.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use rforests::train::dataset::DataSet;
+    ///
+    /// let data = vec![
+    ///     // label, qid, values
+    ///     (3.0, 1, vec![5.0]),
+    ///     (2.0, 2, vec![7.0]),
+    ///     (3.0, 3, vec![3.0]),
+    /// ];
+    ///
+    /// let mut dataset = DataSet::new(3);
+    /// dataset.from_iter(data.into_iter());
+    ///
+    /// assert_eq!(dataset[0].qid(), 1);
+    /// assert_eq!(dataset[0].label(), 3.0);
+    /// assert_eq!(dataset[0].value(1), 5.0);
+    /// assert_eq!(dataset[1].qid(), 2);
+    /// assert_eq!(dataset[2].qid(), 3);
+    /// ```
+    pub fn from_iter<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = (Value, Id, Vec<Value>)>,
+    {
+        let mut instances = Vec::new();
+        let mut nfeatures = 0;
+        for (label, qid, values) in iter {
+            let instance = Instance::from((label, qid, values));
+            nfeatures =
+                usize::max(nfeatures, instance.max_feature_id() as usize);
+            instances.push(instance);
+        }
+
+        self.instances = instances;
+        self.nfeatures = nfeatures;
+        self.generate_thresholds();
     }
 
     /// Returns the number of instances in the data set, also referred
@@ -348,25 +414,6 @@ impl DataSet {
             (id, self.instances[id].value(fid), target)
         });
         threshold_map.histogram(iter)
-    }
-}
-
-use std::iter::FromIterator;
-impl FromIterator<(Value, Id, Vec<Value>)> for DataSet {
-    fn from_iter<T>(iter: T) -> DataSet
-    where
-        T: IntoIterator<Item = (Value, Id, Vec<Value>)>,
-    {
-        let mut instances = Vec::new();
-        let mut nfeatures = 0;
-        for (label, qid, values) in iter {
-            let instance = Instance::from((label, qid, values));
-            nfeatures =
-                usize::max(nfeatures, instance.max_feature_id() as usize);
-            instances.push(instance);
-        }
-
-        DataSet::new(instances, nfeatures)
     }
 }
 
@@ -722,7 +769,8 @@ mod tests {
         let s = "0 qid:3864 1:1.0 2:0.0 3:0.0 4:0.0 5:0.0
 2 qid:3864 1:1.0 2:0.007042 3:0.0 4:0.0 5:0.221591
 0 qid:3865 1:0.289474 2:0.014085 3:0.4 4:0.0 5:0.085227";
-        let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
+        let mut dataset = DataSet::new(3);
+        dataset.load(::std::io::Cursor::new(s)).unwrap();
 
         assert_eq!(dataset.nfeatures, 5);
         assert_eq!(
@@ -746,15 +794,8 @@ mod tests {
         let values = vec![1.0, 2.0, 3.0];
         let instance = Instance::new(label, qid, values);
 
-        // values()
-        let mut iter = instance.values();
-        assert_eq!(iter.next(), Some(1.0));
-        assert_eq!(iter.next(), Some(2.0));
-        assert_eq!(iter.next(), Some(3.0));
-        assert_eq!(iter.next(), None);
-
-        // iter()
-        let mut iter = instance.iter();
+        // value_iter()
+        let mut iter = instance.value_iter();
         assert_eq!(iter.next(), Some((1, 1.0)));
         assert_eq!(iter.next(), Some((2, 2.0)));
         assert_eq!(iter.next(), Some((3, 3.0)));
@@ -779,7 +820,8 @@ mod tests {
     #[test]
     fn test_sorted_feature() {
         let s = "0 qid:1 1:3.0 2:0.0 3:1.0\n2 qid:2 1:1.0 2:1.0 3:3.0\n0 qid:3 1:0.0 2:2.0 3:2.0";
-        let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
+        let mut dataset = DataSet::new(3);
+        dataset.load(::std::io::Cursor::new(s)).unwrap();
 
         let sorted_indices = dataset.feature_sorted_indices(1);
         assert_eq!(sorted_indices, vec![2, 1, 0]);
@@ -825,8 +867,8 @@ mod tests {
             (0.0, 1, vec![6.0]),
         ];
 
-        let mut dataset: DataSet = data.into_iter().collect();
-        dataset.generate_thresholds(3);
+        let mut dataset = DataSet::new(3);
+        dataset.from_iter(data);
 
         let mut training = TrainingSet::from(&dataset);
         training.update_lambdas_weights();
@@ -878,8 +920,8 @@ mod tests {
             (0.0, 1, vec![6.0]), // -0.15483239685503464,
         ];
 
-        let mut dataset: DataSet = data.into_iter().collect();
-        dataset.generate_thresholds(3);
+        let mut dataset = DataSet::new(3);
+        dataset.from_iter(data.into_iter());
 
         let mut training = TrainingSet::from(&dataset);
         training.update_lambdas_weights();
@@ -905,8 +947,8 @@ mod tests {
             (0.0, 1, vec![6.0]), // 8
         ];
 
-        let mut dataset: DataSet = data.into_iter().collect();
-        dataset.generate_thresholds(3);
+        let mut dataset = DataSet::new(3);
+        dataset.from_iter(data.into_iter());
 
         // possible splits of feature values:
         // 1 | 2 3 4 5 6 7 8 9
@@ -940,8 +982,9 @@ mod tests {
             (0.0, 6, vec![6.0]), // 8
         ];
 
-        let mut dataset: DataSet = data.into_iter().collect();
-        dataset.generate_thresholds(3);
+        let mut dataset = DataSet::new(3);
+        dataset.from_iter(data.into_iter());
+
         let mut iter = dataset.query_iter();
         assert_eq!(iter.next(), Some((1, vec![0, 1])));
         assert_eq!(iter.next(), Some((2, vec![2])));

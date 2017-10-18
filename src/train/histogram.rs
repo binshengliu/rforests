@@ -178,8 +178,8 @@ mod test {
 
         let lambdas = vec![3.0, 2.0, 3.0, 1.0, 0.0, 2.0, 4.0, 1.0, 0.0];
 
-        let mut dataset: DataSet = data.into_iter().collect();
-        dataset.generate_thresholds(3);
+        let mut dataset = DataSet::new(3);
+        dataset.from_iter(data.into_iter());
 
         let histogram =
             dataset.feature_histogram(1, lambdas.iter().cloned().enumerate());

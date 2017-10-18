@@ -11,8 +11,9 @@ impl LambdaMART {
     pub fn new() -> LambdaMART {
         let path = "/home/lbs/code/rforests/data/train-lite.txt";
         let f = File::open(path).unwrap();
-        let mut dataset = DataSet::load(f).unwrap();
-        dataset.generate_thresholds(256);
+        let max_bins = 256;
+        let mut dataset = DataSet::new(max_bins);
+        dataset.load(f).unwrap();
         LambdaMART { dataset: dataset }
     }
 

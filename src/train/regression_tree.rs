@@ -151,8 +151,8 @@ mod test {
             (2.0, 1, vec![2.0, 0.0]), // 5
         ];
 
-        let mut dataset: DataSet = data.into_iter().collect();
-        dataset.generate_thresholds(3);
+        let mut dataset = DataSet::new(3);
+        dataset.from_iter(data.into_iter());
 
         let mut training = TrainingSet::from(&dataset);
         // training.init_model_scores(&[3.0, 2.0]);
