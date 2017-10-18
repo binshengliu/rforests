@@ -14,6 +14,7 @@ pub struct Config<M>
     pub learning_rate: f64,
     pub max_leaves: usize,
     pub min_samples_per_leaf: usize,
+    pub thresholds: usize,
     pub metric: M,
 }
 

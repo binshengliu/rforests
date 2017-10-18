@@ -54,6 +54,7 @@ pub fn lambdamart(path: &str) -> Result<()> {
         learning_rate: 0.1,
         max_leaves: 16,
         min_samples_per_leaf: 1,
+        thresholds: 256,
         metric: NDCGScorer::new(10),
     };
     let lambdamart = LambdaMART::new(dataset, config);
