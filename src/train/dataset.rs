@@ -307,6 +307,9 @@ impl DataSet {
                 .map(|instance| instance.value(fid))
                 .collect();
             let map = ThresholdMap::new(values, self.max_bins);
+            debug!("Thresholds for fid {}", fid);
+            debug!("{:?}", map.thresholds);
+
             self.threshold_maps.push(map);
         }
         debug!("Generated thresholds.");
@@ -865,6 +868,7 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
         // (fid, threshold, s)
         let mut splits: Vec<(Id, Value, f64)> = Vec::new();
         for fid in self.fid_iter() {
+            debug!("Find best split for fid {}", fid);
             let feature_histogram = self.feature_histogram(fid);
             let split = feature_histogram.best_split(min_leaf_count);
             match split {

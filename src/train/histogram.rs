@@ -86,7 +86,7 @@ impl Histogram {
         let sum = self.bins.last().unwrap().acc_sum;
         let count = self.bins.last().unwrap().acc_count;
         let mut split: Option<(f64, f64)> = None;
-        for bin in self.bins.iter() {
+        for (index, bin) in self.bins.iter().enumerate() {
             let count_left = bin.acc_count;
             let count_right = count - count_left;
             if count_left < min_leaf || count_right < min_leaf {
@@ -99,6 +99,16 @@ impl Histogram {
             let s_value = sum_left * sum_left / count_left as f64 +
                 sum_right * sum_right / count_right as f64;
 
+            debug!(
+                "Bin {}, threshold {}, left sum {}, left count {}, right sum {}, right count {}, s {}",
+                index,
+                bin.threashold,
+                sum_left,
+                count_left,
+                sum_right,
+                count_right,
+                s_value
+            );
             match split {
                 Some((_old_threashold, old_s)) => {
                     if s_value > old_s {

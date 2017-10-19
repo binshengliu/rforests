@@ -193,6 +193,16 @@ impl RegressionTree {
             node.left = Some(left.clone());
             node.right = Some(right.clone());
 
+            debug!(
+                "Split {} at fid {}, threshold {}, s {} : {} + {}",
+                sample.len(),
+                fid,
+                threshold,
+                _s_value,
+                left_sample.len(),
+                right_sample.len()
+            );
+
             queue.push(NodeData::new(left.clone(), left_sample));
             queue.push(NodeData::new(right.clone(), right_sample));
         }

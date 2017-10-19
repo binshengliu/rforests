@@ -92,7 +92,7 @@ mod test {
             max_leaves: 10,
             min_samples_per_leaf: 1,
             thresholds: 256,
-            print_metric: false,
+            print_metric: true,
             print_tree: false,
             metric: NDCGScorer::new(10),
         };
