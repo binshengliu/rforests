@@ -3,6 +3,8 @@ use train::dataset::*;
 use util::*;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::BinaryHeap;
+use std::cmp::Ordering;
 
 /// A node in the regression tree.
 struct Node {
@@ -93,6 +95,43 @@ pub struct RegressionTree {
     root: Option<Rc<RefCell<Node>>>,
 }
 
+struct NodeData<'t, 'd: 't> {
+    node: Rc<RefCell<Node>>,
+    sample: TrainingSample<'t, 'd>,
+}
+
+impl<'t, 'd: 't> NodeData<'t, 'd> {
+    pub fn new(
+        node: Rc<RefCell<Node>>,
+        sample: TrainingSample<'t, 'd>,
+    ) -> NodeData<'t, 'd> {
+        NodeData {
+            node: node,
+            sample: sample,
+        }
+    }
+}
+
+impl<'t, 'd: 't> PartialEq for NodeData<'t, 'd> {
+    fn eq(&self, other: &NodeData) -> bool {
+        self.sample.variance() == other.sample.variance()
+    }
+}
+
+impl<'t, 'd: 't> PartialOrd for NodeData<'t, 'd> {
+    fn partial_cmp(&self, other: &NodeData) -> Option<Ordering> {
+        self.sample.variance().partial_cmp(&other.sample.variance())
+    }
+}
+
+impl<'t, 'd: 't> Eq for NodeData<'t, 'd> {}
+
+impl<'t, 'd: 't> Ord for NodeData<'t, 'd> {
+    fn cmp(&self, other: &NodeData) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+    }
+}
+
 impl RegressionTree {
     /// Create a new regression tree, with at least min_samples_per_leaf
     /// training instances on the leaves.
@@ -117,11 +156,12 @@ impl RegressionTree {
         let root = Rc::new(RefCell::new(Node::new()));
         self.root = Some(root.clone());
 
-        let mut queue: Vec<(Rc<RefCell<Node>>, TrainingSample)> = Vec::new();
-        queue.push((root.clone(), sample));
+        let mut queue: BinaryHeap<NodeData> =
+            BinaryHeap::with_capacity(self.max_leaves);
+        queue.push(NodeData::new(root.clone(), sample));
 
         while !queue.is_empty() {
-            let (node, sample) = queue.remove(0);
+            let NodeData { node, sample } = queue.pop().unwrap();
 
             // We have reached leaves count limitation.
             if 1 + leaves + queue.len() >= self.max_leaves {
@@ -153,8 +193,8 @@ impl RegressionTree {
             node.left = Some(left.clone());
             node.right = Some(right.clone());
 
-            queue.insert(0, (left.clone(), left_sample));
-            queue.insert(0, (right.clone(), right_sample));
+            queue.push(NodeData::new(left.clone(), left_sample));
+            queue.push(NodeData::new(right.clone(), right_sample));
         }
     }
 

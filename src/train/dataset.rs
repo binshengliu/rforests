@@ -834,7 +834,7 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
     /// Finally, the variance is computed using the formula:
     ///
     /// variance = sum(labels ^ 2) - sum(labels) ^ 2 / left_count
-    fn variance(&self) -> f64 {
+    pub fn variance(&self) -> f64 {
         let (sum, squared_sum) = self.indices.iter().fold(
             (0.0, 0.0),
             |(sum, squared_sum),
