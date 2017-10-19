@@ -111,23 +111,6 @@ impl Histogram {
 
         split
     }
-
-    /// To facilitate computing the variance. We made a little
-    /// transformation.
-    ///
-    /// variance = sum((labels - label_avg) ^ 2), where label_avg =
-    /// sum(labels) / count.
-    ///
-    /// Finally, the variance is computed using the formula:
-    ///
-    /// variance = sum(labels ^ 2) - sum(labels) ^ 2 / left_count
-    fn variance(&self) -> f64 {
-        let sum = self.bins.last().unwrap().acc_sum;
-        let count = self.bins.last().unwrap().acc_count;
-        let squared_sum = self.bins.last().unwrap().acc_squared_sum;
-
-        squared_sum - sum * sum / count as f64
-    }
 }
 
 use std::iter::FromIterator;
