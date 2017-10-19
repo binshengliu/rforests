@@ -15,6 +15,7 @@ pub struct Config<M> {
     pub min_samples_per_leaf: usize,
     pub thresholds: usize,
     pub print_metric: bool,
+    pub print_tree: bool,
     pub metric: M,
 }
 
@@ -57,7 +58,9 @@ where
             );
             tree.fit(&training);
 
-            tree.print();
+            if self.config.print_tree {
+                tree.print();
+            }
 
             ensemble.push(tree);
 
@@ -91,6 +94,7 @@ mod test {
             min_samples_per_leaf: 1,
             thresholds: 256,
             print_metric: false,
+            print_tree: false,
             metric: NDCGScorer::new(10),
         };
         let lambdamart = LambdaMART::new(dataset, config);
