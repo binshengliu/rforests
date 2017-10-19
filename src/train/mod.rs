@@ -50,11 +50,12 @@ pub fn lambdamart(path: &str) -> Result<()> {
     dataset.load(f).unwrap();
 
     let config = Config {
-        trees: 10,
+        trees: 1000,
         learning_rate: 0.1,
-        max_leaves: 16,
+        max_leaves: 10,
         min_samples_per_leaf: 1,
         thresholds: 256,
+        print_metric: false,
         metric: NDCGScorer::new(10),
     };
     let lambdamart = LambdaMART::new(dataset, config);

@@ -9,8 +9,8 @@ struct Node {
     fid: Option<Id>,
     threshold: Option<Value>,
     output: Option<f64>,
-    left: Option<Box<Node>>,
-    right: Option<Box<Node>>,
+    left: Option<Rc<RefCell<Node>>>,
+    right: Option<Rc<RefCell<Node>>>,
 }
 
 impl Node {
@@ -32,9 +32,32 @@ impl Node {
         }
 
         if instance.value(self.fid.unwrap()) <= self.threshold.unwrap() {
-            self.left.as_ref().unwrap().evaluate(instance)
+            self.left.as_ref().unwrap().borrow().evaluate(instance)
         } else {
-            self.right.as_ref().unwrap().evaluate(instance)
+            self.right.as_ref().unwrap().borrow().evaluate(instance)
+        }
+    }
+
+    pub fn print(&self, indent: usize) {
+        print!("{:width$}", "", width = indent);
+        if let Some(output) = self.output {
+            println!(
+                "{{ output: {:?} }}",
+                output,
+            );
+        } else {
+            println!(
+                "{{ fid: {:?}, threshold: {:?} }}",
+                option_to_string(&self.fid),
+                option_to_string(&self.threshold)
+            );
+        }
+
+        if let Some(ref left) = self.left {
+            left.borrow().print(indent + 2);
+        }
+        if let Some(ref right) = self.right {
+            right.borrow().print(indent + 2);
         }
     }
 }
@@ -50,6 +73,13 @@ impl std::fmt::Debug for Node {
             self.left,
             self.right
         )
+    }
+}
+
+fn option_to_string<T: ToString>(option: &Option<T>) -> String {
+    match option {
+        &Some(ref value) => value.to_string(),
+        &None => "None".to_string(),
     }
 }
 
@@ -97,7 +127,7 @@ impl RegressionTree {
             if 1 + leaves + queue.len() >= self.max_leaves {
                 let value = sample.newton_output();
                 node.borrow_mut().output = Some(value);
-                sample.update_output(value);
+                sample.update_output(value * self.learning_rate);
                 leaves += 1;
                 continue;
             }
@@ -106,7 +136,7 @@ impl RegressionTree {
             if split_result.is_none() {
                 let value = sample.newton_output();
                 node.borrow_mut().output = Some(value);
-                sample.update_output(value);
+                sample.update_output(value * self.learning_rate);
                 leaves += 1;
                 continue;
             }
@@ -114,14 +144,17 @@ impl RegressionTree {
             let (fid, threshold, _s_value, left_sample, right_sample) =
                 split_result.unwrap();
 
-            let mut node = node.borrow_mut();
-            node.fid = Some(fid);
-            node.threshold = Some(threshold);
             let left = Rc::new(RefCell::new(Node::new()));
             let right = Rc::new(RefCell::new(Node::new()));
 
-            queue.push((left.clone(), left_sample));
-            queue.push((right.clone(), right_sample));
+            let mut node = node.borrow_mut();
+            node.fid = Some(fid);
+            node.threshold = Some(threshold);
+            node.left = Some(left.clone());
+            node.right = Some(right.clone());
+
+            queue.insert(0, (left.clone(), left_sample));
+            queue.insert(0, (right.clone(), right_sample));
         }
     }
 
@@ -129,6 +162,14 @@ impl RegressionTree {
     pub fn evaluate(&self, instance: &Instance) -> f64 {
         self.root.as_ref().unwrap().borrow().evaluate(instance) *
             self.learning_rate
+    }
+
+    pub fn print(&self) {
+        if let Some(ref root) = self.root {
+            root.borrow().print(0);
+        } else {
+            println!("Empty");
+        }
     }
 }
 
