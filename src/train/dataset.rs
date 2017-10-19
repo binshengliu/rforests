@@ -533,14 +533,19 @@ impl DataSet {
                 .iter()
                 .map(|&id| (id, ensemble.evaluate(&self.instances[id])))
                 .collect();
-            model_scores.sort_by(|&a, &b| b.partial_cmp(&a).unwrap_or(Equal));
+            model_scores.sort_by(|&(_index1, score1), &(_index2, score2)| {
+                score2.partial_cmp(&score1).unwrap_or(Equal)
+            });
+
             let labels: Vec<f64> = model_scores
                 .iter()
                 .map(|&(id, _)| self.instances[id].label())
                 .collect();
-            score += metric.score(&labels);
-            count += 1;
+            let query_score = metric.score(&labels);
             debug!("Model score for qid {}: {}", qid, score);
+
+            count += 1;
+            score += query_score;
         }
 
         let result = score / count as f64;
