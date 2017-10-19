@@ -36,7 +36,6 @@ where
 
     pub fn learn(&self) -> Result<()> {
         let learning_rate = 0.1;
-        let min_samples_per_leaf = 10;
         let max_leaves = 10;
         let mut ensemble = Ensemble::new();
         let mut training = TrainingSet::from(&self.dataset);
@@ -54,7 +53,7 @@ where
             let mut tree = RegressionTree::new(
                 learning_rate,
                 max_leaves,
-                min_samples_per_leaf,
+                self.config.min_samples_per_leaf,
             );
             tree.fit(&training);
 

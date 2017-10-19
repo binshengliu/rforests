@@ -111,6 +111,8 @@ impl ThresholdMap {
     fn thresholds(sorted_values: Vec<Value>, max_bins: usize) -> Vec<Value> {
         let mut thresholds = sorted_values;
 
+        thresholds.dedup();
+
         // If too many values, generate at most max_bins thresholds.
         if thresholds.len() > max_bins {
             let max = *thresholds.last().unwrap();
