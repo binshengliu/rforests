@@ -551,6 +551,11 @@ impl<'d> TrainingSet<'d> {
         (self.model_scores[index].get(), &self.dataset[index])
     }
 
+    /// Get lambda at given index.
+    fn lambda(&self, index: usize) -> Value {
+        self.lambdas[index]
+    }
+
     /// Get (lambda, weight) at given index.
     fn get_lambda_weight(&self, index: usize) -> (Value, Value) {
         (self.lambdas[index], self.weights[index])
@@ -820,6 +825,29 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
         )
     }
 
+    /// To facilitate computing the variance. We made a little
+    /// transformation.
+    ///
+    /// variance = sum((labels - label_avg) ^ 2), where label_avg =
+    /// sum(labels) / count.
+    ///
+    /// Finally, the variance is computed using the formula:
+    ///
+    /// variance = sum(labels ^ 2) - sum(labels) ^ 2 / left_count
+    fn variance(&self) -> f64 {
+        let (sum, squared_sum) = self.indices.iter().fold(
+            (0.0, 0.0),
+            |(sum, squared_sum),
+             &index| {
+                let value = self.training.lambda(index);
+                (sum + value, squared_sum + value * value)
+            },
+        );
+        let count = self.indices.len() as f64;
+        let variance = squared_sum - sum * sum / count;
+        variance
+    }
+
     /// Split self. Returns (split feature, threshold, s value, left
     /// child, right child). For each split, if its variance is zero,
     /// it's non-splitable.
@@ -828,6 +856,10 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
         min_leaf_count: usize,
     ) -> Option<(Id, Value, f64, TrainingSample<'t, 'd>, TrainingSample<'t, 'd>)> {
         assert!(min_leaf_count > 0);
+        if self.variance().abs() <= 0.000001 {
+            return None;
+        }
+
         // (fid, threshold, s)
         let mut splits: Vec<(Id, Value, f64)> = Vec::new();
         for fid in self.fid_iter() {

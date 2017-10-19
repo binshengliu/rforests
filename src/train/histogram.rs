@@ -83,11 +83,6 @@ impl Histogram {
     /// To minimize the result, we just need to find a point that
     /// maximizes sum(left_label) ^ 2 + sum(right_labels) ^ 2
     pub fn best_split(&self, min_leaf: usize) -> Option<(Value, f64)> {
-        let variance = self.variance();
-        if variance.abs() <= 0.000001 {
-            return None;
-        }
-
         let sum = self.bins.last().unwrap().acc_sum;
         let count = self.bins.last().unwrap().acc_count;
         let mut split: Option<(f64, f64)> = None;
