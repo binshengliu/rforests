@@ -624,8 +624,12 @@ impl<'d> TrainingSet<'d> {
     pub fn update_lambdas_weights(&mut self) {
         let ndcg = NDCGScorer::new(10);
 
-        for (_qid, query) in self.dataset.query_iter() {
-            self.update_lambda_weight_by_query(&query, &ndcg);
+        for (lambda, weight) in self.lambdas.iter_mut().zip(self.weights.iter_mut()) {
+            *lambda = 0.0;
+            *weight = 0.0;
+        }
+        for (qid, query) in self.dataset.query_iter() {
+            self.update_lambda_weight_by_query(qid, &query, &ndcg);
         }
     }
 
