@@ -629,7 +629,8 @@ impl<'d> TrainingSet<'d> {
             *weight = 0.0;
         }
         for (qid, query) in self.dataset.query_iter() {
-            self.update_lambda_weight_by_query(qid, &query, &ndcg);
+            debug!("Update lambdas for qid {}", qid);
+            self.update_lambda_weight_by_query(&query, &ndcg);
         }
     }
 
