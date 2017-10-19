@@ -55,6 +55,9 @@ where
                 max_leaves,
                 self.config.min_samples_per_leaf,
             );
+
+            // The scores of the model are updated when the tree node
+            // does not split and becomes a leaf.
             tree.fit(&training);
 
             if self.config.print_tree {
@@ -63,9 +66,8 @@ where
 
             ensemble.push(tree);
 
-            let score = training.evaluate(&self.config.metric);
-
             if self.config.print_metric {
+                let score = training.evaluate(&self.config.metric);
                 println!("{:<7} | {:>9.4} | {:>9.4}", i, score, "");
             }
         }

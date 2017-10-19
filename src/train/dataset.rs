@@ -6,6 +6,7 @@ use util::{Id, Result, Value};
 use format::svmlight::*;
 use std;
 use std::cmp::Ordering::*;
+use train::regression_tree::*;
 
 /// An instance of a label, a qid, and a group of feature values.
 #[derive(Debug, PartialEq)]
@@ -520,6 +521,32 @@ impl DataSet {
         });
         threshold_map.histogram(iter)
     }
+
+    pub fn validate<M>(&self, ensemble: &Ensemble, metric: &M) -> f64
+    where
+        M: MetricScorer,
+    {
+        let mut score = 0.0;
+        let mut count = 0;
+        for (qid, query) in self.query_iter() {
+            let mut model_scores: Vec<(Id, Value)> = query
+                .iter()
+                .map(|&id| (id, ensemble.evaluate(&self.instances[id])))
+                .collect();
+            model_scores.sort_by(|&a, &b| b.partial_cmp(&a).unwrap_or(Equal));
+            let labels: Vec<f64> = model_scores
+                .iter()
+                .map(|&(id, _)| self.instances[id].label())
+                .collect();
+            score += metric.score(&labels);
+            count += 1;
+            debug!("Model score for qid {}: {}", qid, score);
+        }
+
+        let result = score / count as f64;
+        debug!("Model score for validation data: {}", result);
+        result
+    }
 }
 
 impl std::ops::Deref for DataSet {
@@ -624,7 +651,10 @@ impl<'d> TrainingSet<'d> {
     pub fn update_lambdas_weights(&mut self) {
         let ndcg = NDCGScorer::new(10);
 
-        for (lambda, weight) in self.lambdas.iter_mut().zip(self.weights.iter_mut()) {
+        for (lambda, weight) in self.lambdas.iter_mut().zip(
+            self.weights.iter_mut(),
+        )
+        {
             *lambda = 0.0;
             *weight = 0.0;
         }
