@@ -281,7 +281,7 @@ impl DataSet {
     /// ```
     /// use rforests::train::dataset::DataSet;
     ///
-    /// let mut dataset = DataSet::new(3);
+    /// let _dataset = DataSet::new(3);
     /// ```
     pub fn new(max_bins: usize) -> DataSet {
         DataSet {
