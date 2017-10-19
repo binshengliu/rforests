@@ -49,6 +49,10 @@ pub fn lambdamart(path: &str) -> Result<()> {
     let mut dataset = DataSet::new(max_bins);
     dataset.load(f).unwrap();
 
+    let v = File::open("/home/lbs/code/rforests/data/valid.txt")?;
+    let mut validation = DataSet::new(256);
+    validation.load(v).unwrap();
+
     let config = Config {
         trees: 1000,
         learning_rate: 0.1,
@@ -58,6 +62,7 @@ pub fn lambdamart(path: &str) -> Result<()> {
         print_metric: true,
         print_tree: false,
         metric: NDCGScorer::new(10),
+        validation: Some(validation),
     };
     let lambdamart = LambdaMART::new(dataset, config);
     lambdamart.init().unwrap();

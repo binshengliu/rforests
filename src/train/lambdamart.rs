@@ -17,6 +17,7 @@ pub struct Config<M> {
     pub print_metric: bool,
     pub print_tree: bool,
     pub metric: M,
+    pub validation: Option<DataSet>,
 }
 
 impl<M> LambdaMART<M>
@@ -67,8 +68,25 @@ where
             ensemble.push(tree);
 
             if self.config.print_metric {
-                let score = training.evaluate(&self.config.metric);
-                println!("{:<7} | {:>9.4} | {:>9.4}", i, score, "");
+                let train_score = training.evaluate(&self.config.metric);
+                let mut validation_score = None;
+                if let Some(ref validation) = self.config.validation {
+                    validation_score = Some(validation.validate(
+                        &ensemble,
+                        &self.config.metric,
+                    ));
+                }
+
+                if let Some(validation_score) = validation_score {
+                    println!(
+                        "{:<7} | {:>9.4} | {:>9.4}",
+                        i,
+                        train_score,
+                        validation_score
+                    );
+                } else {
+                    println!("{:<7} | {:>9.4} | {:>9.4}", i, train_score, "");
+                }
             }
         }
         Ok(())
@@ -97,6 +115,7 @@ mod test {
             print_metric: true,
             print_tree: false,
             metric: NDCGScorer::new(10),
+            validation: None,
         };
         let lambdamart = LambdaMART::new(dataset, config);
         lambdamart.init().unwrap();
