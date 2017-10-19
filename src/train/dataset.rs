@@ -343,7 +343,11 @@ impl DataSet {
                 usize::max(nfeatures, instance.max_feature_id() as usize);
             instances.push(instance);
         }
-        debug!("Loaded {} instances, {} features.", instances.len(), nfeatures);
+        debug!(
+            "Loaded {} instances, {} features.",
+            instances.len(),
+            nfeatures
+        );
 
         self.instances = instances;
         self.nfeatures = nfeatures;
@@ -756,7 +760,9 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
     /// The iterator returned yields pairs (index, value, instance),
     /// where `index` is the index of Instance, `value` is the label
     /// value, and `instance` is the reference to the Instance.
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Id, Value, &Instance)> + 'a{
+    pub fn iter<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (Id, Value, &Instance)> + 'a {
         self.indices.iter().map(move |&index| {
             let (label, instance) = self.training.get(index);
             (index, label, instance)
@@ -776,7 +782,10 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
 
     /// Returns an iterator over the values of the given feature in
     /// the data set sample.
-    pub fn value_iter<'a>(&'a self, fid: Id) -> impl Iterator<Item = Value> + 'a {
+    pub fn value_iter<'a>(
+        &'a self,
+        fid: Id,
+    ) -> impl Iterator<Item = Value> + 'a {
         self.iter().map(move |(_index, _label, ins)| ins.value(fid))
     }
 
