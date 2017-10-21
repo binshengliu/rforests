@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::prelude::*;
 use util::*;
-use train::lambdamart::dataset::*;
+use train::dataset::*;
 
 // Format of the example file. http://svmlight.joachims.org/
 // <line> .=. <target> <feature>:<value> <feature>:<value> ... <feature>:<value> # <info>

@@ -1,7 +1,8 @@
 use super::regression_tree::*;
-use super::dataset::*;
+use train::dataset::*;
 use util::*;
 use metric::*;
+use super::training_set::*;
 
 /// A instance of LambdaMART algorithm.
 pub struct LambdaMART {
@@ -34,17 +35,16 @@ impl LambdaMART {
     /// # use rforests::util::Result;
     /// # pub fn lambdamart(train_path: &str, valid_path: &str) -> Result<()> {
     ///     use std::fs::File;
-    ///     use rforests::train::lambdamart::dataset::*;
+    ///     use rforests::train::dataset::*;
     ///     use rforests::train::lambdamart::lambdamart::*;
     ///     use rforests::metric;
     ///
-    ///     let max_bins = 256;
     ///     let f = File::open(train_path)?;
-    ///     let mut dataset = DataSet::new(max_bins);
+    ///     let mut dataset = DataSet::new();
     ///     dataset.load(f).unwrap();
     ///
     ///     let v = File::open(valid_path)?;
-    ///     let mut validate = DataSet::new(256);
+    ///     let mut validate = DataSet::new();
     ///     validate.load(v).unwrap();
     ///
     ///     let config = Config {
@@ -80,7 +80,7 @@ impl LambdaMART {
     /// specified when creating LambdaMART instance.
     pub fn learn(&self) -> Result<()> {
         let mut ensemble = Ensemble::new();
-        let mut training = TrainingSet::from(&self.config.train);
+        let mut training = TrainingSet::new(&self.config.train, self.config.thresholds);
         self.print_metric_header();
         for i in 0..self.config.trees {
             training.update_lambdas_weights();
@@ -159,16 +159,16 @@ mod test {
 
     #[test]
     fn test_lambda_mart() {
-        let path = "/home/lbs/code/rforests/data/train-lite.txt";
-        let max_bins = 256;
+        // CWD of cargo test is the root of the project.
+        let path = "./data/train-lite.txt";
         let f = File::open(path).unwrap();
-        let mut dataset = DataSet::new(max_bins);
+        let mut dataset = DataSet::new();
         dataset.load(f).unwrap();
 
         let config = Config {
             train: dataset,
             test: None,
-            trees: 1,
+            trees: 10,
             early_stop: 100,
             learning_rate: 0.1,
             max_leaves: 10,

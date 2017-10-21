@@ -1,3 +1,4 @@
+pub mod dataset;
 pub mod lambdamart;
 
 use clap::{App, Arg, ArgMatches, SubCommand};

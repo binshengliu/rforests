@@ -1,10 +1,11 @@
 use std;
-use super::dataset::*;
+use train::dataset::*;
 use util::*;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
+use train::lambdamart::training_set::*;
 
 /// A node in the regression tree.
 struct Node {
@@ -272,10 +273,10 @@ mod test {
             (2.0, 1, vec![2.0, 0.0]), // 5
         ];
 
-        let mut dataset = DataSet::new(3);
+        let mut dataset = DataSet::new();
         dataset.from_iter(data.into_iter());
 
-        let mut training = TrainingSet::from(&dataset);
+        let mut training = TrainingSet::new(&dataset, 3);
         // training.init_model_scores(&[3.0, 2.0]);
         let learning_rate = 0.1;
         let min_samples_per_leaf = 1;
