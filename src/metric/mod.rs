@@ -15,3 +15,10 @@ pub trait MetricScorer {
     fn name(&self) -> String;
 }
 
+pub fn new(name: &str, k: usize) -> Option<Box<MetricScorer>> {
+    match name {
+        "NDCG" => Some(Box::new(NDCGScorer::new(k))),
+        "DCG" => Some(Box::new(DCGScorer::new(k))),
+        _ => None,
+    }
+}

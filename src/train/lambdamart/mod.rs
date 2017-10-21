@@ -2,9 +2,9 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use std::fs::File;
 use self::dataset::*;
 use self::lambdamart::*;
-use metric::*;
 use std;
 use std::process::exit;
+use metric;
 
 pub mod dataset;
 pub mod lambdamart;
@@ -84,7 +84,10 @@ impl<'a> LambdaMARTParameter<'a> {
             dataset
         });
 
-        let config = Config {
+        // The param is valid.
+        let metric = metric::new(self.metric, self.metric_k).unwrap();
+
+        Config {
             train: train_dataset,
             test: test,
             trees: 1000,
@@ -94,12 +97,10 @@ impl<'a> LambdaMARTParameter<'a> {
             thresholds: 256,
             print_metric: true,
             print_tree: false,
-            metric: Box::new(NDCGScorer::new(10)),
+            metric: metric,
             validate: validate,
             early_stop: self.early_stop,
-        };
-
-        config
+        }
     }
 
     pub fn print(&self) {
@@ -136,10 +137,10 @@ impl<'a> LambdaMARTParameter<'a> {
 }
 
 pub fn main<'a>(matches: &ArgMatches<'a>) {
-    let params = LambdaMARTParameter::parse(matches);
-    params.print();
+    let param = LambdaMARTParameter::parse(matches);
+    param.print();
 
-    let lambdamart = LambdaMART::new(params.config());
+    let lambdamart = LambdaMART::new(param.config());
     lambdamart.init().unwrap();
     lambdamart.learn().unwrap();
 }
