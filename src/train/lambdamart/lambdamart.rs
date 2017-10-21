@@ -40,12 +40,10 @@ impl LambdaMART {
     ///     use rforests::metric;
     ///
     ///     let f = File::open(train_path)?;
-    ///     let mut dataset = DataSet::new();
-    ///     dataset.load(f).unwrap();
+    ///     let dataset = DataSet::load(f).unwrap();
     ///
     ///     let v = File::open(valid_path)?;
-    ///     let mut validate = DataSet::new();
-    ///     validate.load(v).unwrap();
+    ///     let mut validate = DataSet::load(v).unwrap();
     ///
     ///     let config = Config {
     ///         train: dataset,
@@ -162,8 +160,7 @@ mod test {
         // CWD of cargo test is the root of the project.
         let path = "./data/train-lite.txt";
         let f = File::open(path).unwrap();
-        let mut dataset = DataSet::new();
-        dataset.load(f).unwrap();
+        let dataset = DataSet::load(f).unwrap();
 
         let config = Config {
             train: dataset,

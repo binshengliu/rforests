@@ -679,8 +679,7 @@ mod tests {
             (0.0, 1, vec![6.0]),
         ];
 
-        let mut dataset = DataSet::new();
-        dataset.from_iter(data);
+        let dataset: DataSet = data.into_iter().collect();
 
         let mut training = TrainingSet::new(&dataset, 3);
         training.update_lambdas_weights();
@@ -732,8 +731,7 @@ mod tests {
             (0.0, 1, vec![6.0]), // -0.15483239685503464,
         ];
 
-        let mut dataset = DataSet::new();
-        dataset.from_iter(data.into_iter());
+        let dataset: DataSet = data.into_iter().collect();
 
         let mut training = TrainingSet::new(&dataset, 3);
         training.update_lambdas_weights();
@@ -759,8 +757,7 @@ mod tests {
             (0.0, 1, vec![6.0]), // 8
         ];
 
-        let mut dataset = DataSet::new();
-        dataset.from_iter(data.into_iter());
+        let dataset: DataSet = data.into_iter().collect();
 
         // possible splits of feature values:
         // 1 | 2 3 4 5 6 7 8 9

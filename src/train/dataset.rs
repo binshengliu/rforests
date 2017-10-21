@@ -113,22 +113,49 @@ pub struct DataSet {
     instances: Vec<Instance>,
 }
 
-impl DataSet {
-    /// Create an empty DataSet.
+impl std::iter::FromIterator<(Value, Id, Vec<Value>)> for DataSet {
+    /// Load data from an Iterator.
+    ///
     /// # Examples
     ///
     /// ```
     /// use rforests::train::dataset::DataSet;
     ///
-    /// let _dataset = DataSet::new();
+    /// let data = vec![
+    ///     // label, qid, values
+    ///     (3.0, 1, vec![5.0]),
+    ///     (2.0, 2, vec![7.0]),
+    ///     (3.0, 3, vec![3.0]),
+    /// ];
+    ///
+    /// let mut dataset: DataSet = data.into_iter().collect();
+    ///
+    /// assert_eq!(dataset[0].qid(), 1);
+    /// assert_eq!(dataset[0].label(), 3.0);
+    /// assert_eq!(dataset[0].value(1), 5.0);
+    /// assert_eq!(dataset[1].qid(), 2);
+    /// assert_eq!(dataset[2].qid(), 3);
     /// ```
-    pub fn new() -> DataSet {
+    fn from_iter<T>(iter: T) -> DataSet
+    where
+        T: IntoIterator<Item = (Value, Id, Vec<Value>)>,
+    {
+        let mut instances = Vec::new();
+        let mut nfeatures = 0;
+        for (label, qid, values) in iter {
+            let instance = Instance::from((label, qid, values));
+            nfeatures =
+                usize::max(nfeatures, instance.max_feature_id() as usize);
+            instances.push(instance);
+        }
+
         DataSet {
-            nfeatures: 0,
-            instances: Vec::new(),
+            instances: instances,
+            nfeatures: nfeatures,
         }
     }
-
+}
+impl DataSet {
     /// Load data set from a reader.
     ///
     /// # Examples
@@ -140,8 +167,7 @@ impl DataSet {
     /// 2.0 qid:2 1:7.0
     /// 3.0 qid:3 1:3.0";
     ///
-    /// let mut dataset = DataSet::new();
-    /// dataset.load(::std::io::Cursor::new(s)).unwrap();
+    /// let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
     ///
     /// assert_eq!(dataset[0].qid(), 1);
     /// assert_eq!(dataset[0].label(), 3.0);
@@ -149,7 +175,7 @@ impl DataSet {
     /// assert_eq!(dataset[1].qid(), 2);
     /// assert_eq!(dataset[2].qid(), 3);
     /// ```
-    pub fn load<R>(&mut self, reader: R) -> Result<()>
+    pub fn load<R>(reader: R) -> Result<DataSet>
     where
         R: ::std::io::Read,
     {
@@ -168,50 +194,10 @@ impl DataSet {
             nfeatures
         );
 
-        self.instances = instances;
-        self.nfeatures = nfeatures;
-
-        Ok(())
-    }
-
-    /// Load data from an Iterator.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rforests::train::dataset::DataSet;
-    ///
-    /// let data = vec![
-    ///     // label, qid, values
-    ///     (3.0, 1, vec![5.0]),
-    ///     (2.0, 2, vec![7.0]),
-    ///     (3.0, 3, vec![3.0]),
-    /// ];
-    ///
-    /// let mut dataset = DataSet::new();
-    /// dataset.from_iter(data.into_iter());
-    ///
-    /// assert_eq!(dataset[0].qid(), 1);
-    /// assert_eq!(dataset[0].label(), 3.0);
-    /// assert_eq!(dataset[0].value(1), 5.0);
-    /// assert_eq!(dataset[1].qid(), 2);
-    /// assert_eq!(dataset[2].qid(), 3);
-    /// ```
-    pub fn from_iter<T>(&mut self, iter: T)
-    where
-        T: IntoIterator<Item = (Value, Id, Vec<Value>)>,
-    {
-        let mut instances = Vec::new();
-        let mut nfeatures = 0;
-        for (label, qid, values) in iter {
-            let instance = Instance::from((label, qid, values));
-            nfeatures =
-                usize::max(nfeatures, instance.max_feature_id() as usize);
-            instances.push(instance);
-        }
-
-        self.instances = instances;
-        self.nfeatures = nfeatures;
+        Ok(DataSet {
+            instances: instances,
+            nfeatures: nfeatures,
+        })
     }
 
     /// Returns the number of instances in the data set, also referred
@@ -229,8 +215,7 @@ impl DataSet {
     ///     (3.0, 3, vec![3.0]),
     /// ];
     ///
-    /// let mut dataset = DataSet::new();
-    /// dataset.from_iter(data.into_iter());
+    /// let mut dataset: DataSet = data.into_iter().collect();
     ///
     /// assert_eq!(dataset.len(), 3);
     /// ```
@@ -250,8 +235,7 @@ impl DataSet {
     ///     (3.0, 1, vec![5.0, 6.0]),
     /// ];
     ///
-    /// let mut dataset = DataSet::new();
-    /// dataset.from_iter(data.into_iter());
+    /// let mut dataset: DataSet = data.into_iter().collect();
     ///
     /// let mut iter = dataset.fid_iter();
     /// assert_eq!(iter.next(), Some(1));
@@ -275,8 +259,7 @@ impl DataSet {
     ///     (2.0, 2, vec![7.0, 8.0]),
     /// ];
     ///
-    /// let mut dataset = DataSet::new();
-    /// dataset.from_iter(data.into_iter());
+    /// let mut dataset: DataSet = data.into_iter().collect();
     ///
     /// let mut iter = dataset.label_iter();
     /// assert_eq!(iter.next(), Some(3.0));
@@ -291,7 +274,9 @@ impl DataSet {
         &'a self,
         fid: Id,
     ) -> impl Iterator<Item = Value> + 'a {
-        self.instances.iter().map(move |instance| instance.value(fid))
+        self.instances.iter().map(
+            move |instance| instance.value(fid),
+        )
     }
 
     /// Returns an iterator over the queries' indices.
@@ -309,8 +294,7 @@ impl DataSet {
     ///     (1.0, 5, vec![2.0]), // 3
     /// ];
     ///
-    /// let mut dataset = DataSet::new();
-    /// dataset.from_iter(data.into_iter());
+    /// let mut dataset: DataSet = data.into_iter().collect();
     ///
     /// let mut iter = dataset.query_iter();
     /// assert_eq!(iter.next(), Some((1, vec![0, 1])));
@@ -374,8 +358,7 @@ mod test {
         let s = "0 qid:3864 1:1.0 2:0.0 3:0.0 4:0.0 5:0.0
 2 qid:3864 1:1.0 2:0.007042 3:0.0 4:0.0 5:0.221591
 0 qid:3865 1:0.289474 2:0.014085 3:0.4 4:0.0 5:0.085227";
-        let mut dataset = DataSet::new();
-        dataset.load(::std::io::Cursor::new(s)).unwrap();
+        let dataset = DataSet::load(::std::io::Cursor::new(s)).unwrap();
 
         assert_eq!(dataset.nfeatures, 5);
         assert_eq!(

@@ -67,20 +67,17 @@ impl<'a> LambdaMARTParameter<'a> {
     pub fn config(&self) -> Config {
         let train_file =
             File::open(self.train_file_path).unwrap_or_else(|_e| exit(1));
-        let mut train_dataset = DataSet::new();
-        train_dataset.load(train_file).unwrap();
+        let train_dataset = DataSet::load(train_file).unwrap_or_else(|_e| exit(1));
 
         let validate = self.validate_file_path.map(|path| {
             let file = File::open(path).unwrap_or_else(|_e| exit(1));
-            let mut dataset = DataSet::new();
-            dataset.load(file).unwrap();
+            let dataset = DataSet::load(file).unwrap_or_else(|_e| exit(1));
             dataset
         });
 
         let test = self.test_file_path.map(|path| {
             let file = File::open(path).unwrap_or_else(|_e| exit(1));
-            let mut dataset = DataSet::new();
-            dataset.load(file).unwrap();
+            let dataset = DataSet::load(file).unwrap_or_else(|_e| exit(1));
             dataset
         });
 

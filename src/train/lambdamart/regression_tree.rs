@@ -273,8 +273,7 @@ mod test {
             (2.0, 1, vec![2.0, 0.0]), // 5
         ];
 
-        let mut dataset = DataSet::new();
-        dataset.from_iter(data.into_iter());
+        let dataset: DataSet = data.into_iter().collect();
 
         let mut training = TrainingSet::new(&dataset, 3);
         // training.init_model_scores(&[3.0, 2.0]);
