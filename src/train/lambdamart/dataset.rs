@@ -1,12 +1,12 @@
 use std::cell::Cell;
 use metric::NDCGScorer;
 use metric::MetricScorer;
-use train::histogram::*;
+use super::histogram::*;
 use util::{Id, Result, Value};
 use format::svmlight::*;
 use std;
 use std::cmp::Ordering::*;
-use train::regression_tree::*;
+use super::regression_tree::*;
 
 /// An instance of a label, a qid, and a group of feature values.
 #[derive(Debug, PartialEq)]
@@ -522,10 +522,7 @@ impl DataSet {
         threshold_map.histogram(iter)
     }
 
-    pub fn validate<M>(&self, ensemble: &Ensemble, metric: &M) -> f64
-    where
-        M: MetricScorer,
-    {
+    pub fn validate(&self, ensemble: &Ensemble, metric: &Box<MetricScorer>) -> f64 {
         let mut score = 0.0;
         let mut count = 0;
         for (qid, query) in self.query_iter() {
@@ -741,10 +738,7 @@ impl<'d> TrainingSet<'d> {
         }
     }
 
-    pub fn evaluate<S>(&self, metric: &S) -> f64
-    where
-        S: MetricScorer,
-    {
+    pub fn evaluate(&self, metric: &Box<MetricScorer>) -> f64 {
         let mut score = 0.0;
         let mut count = 0;
         for (_qid, mut indices) in self.dataset.query_iter() {

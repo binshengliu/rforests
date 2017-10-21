@@ -1,31 +1,31 @@
-use train::regression_tree::*;
-use train::dataset::*;
+use super::regression_tree::*;
+use super::dataset::*;
 use util::*;
 use metric::*;
 
 /// A instance of LambdaMART algorithm.
-pub struct LambdaMART<M> {
-    dataset: DataSet,
-    config: Config<M>,
+pub struct LambdaMART {
+    config: Config,
 }
 
 /// Configurable options for LambdaMART.
-pub struct Config<M> {
+pub struct Config {
+    pub train: DataSet,
+    pub validate: Option<DataSet>,
+    pub test: Option<DataSet>,
+
+    pub metric: Box<MetricScorer>,
     pub trees: usize,
-    pub learning_rate: f64,
     pub max_leaves: usize,
-    pub min_samples_per_leaf: usize,
+    pub learning_rate: f64,
     pub thresholds: usize,
+    pub min_samples_per_leaf: usize,
+    pub early_stop: usize,
     pub print_metric: bool,
     pub print_tree: bool,
-    pub metric: M,
-    pub validation: Option<DataSet>,
 }
 
-impl<M> LambdaMART<M>
-where
-    M: MetricScorer,
-{
+impl LambdaMART {
     /// Create a new LambdaMART instance.
     ///
     /// # Examples
@@ -44,8 +44,8 @@ where
     ///     dataset.load(f).unwrap();
     ///
     ///     let v = File::open(valid_path)?;
-    ///     let mut validation = DataSet::new(256);
-    ///     validation.load(v).unwrap();
+    ///     let mut validate = DataSet::new(256);
+    ///     validate.load(v).unwrap();
     ///
     ///     let config = Config {
     ///         trees: 1000,
@@ -56,7 +56,7 @@ where
     ///         print_metric: true,
     ///         print_tree: false,
     ///         metric: NDCGScorer::new(10),
-    ///         validation: Some(validation),
+    ///         validate: Some(validate),
     ///     };
     ///     let lambdamart = LambdaMART::new(dataset, config);
     ///     lambdamart.init()?;
@@ -64,11 +64,8 @@ where
     /// #    Ok(())
     /// # }
     /// ```
-    pub fn new(dataset: DataSet, config: Config<M>) -> LambdaMART<M> {
-        LambdaMART {
-            dataset: dataset,
-            config: config,
-        }
+    pub fn new(config: Config) -> LambdaMART {
+        LambdaMART { config: config }
     }
 
     /// Initializes LambdaMART algorithm.
@@ -80,7 +77,7 @@ where
     /// specified when creating LambdaMART instance.
     pub fn learn(&self) -> Result<()> {
         let mut ensemble = Ensemble::new();
-        let mut training = TrainingSet::from(&self.dataset);
+        let mut training = TrainingSet::from(&self.config.train);
         self.print_metric_header();
         for i in 0..self.config.trees {
             training.update_lambdas_weights();
@@ -128,9 +125,9 @@ where
         if self.config.print_metric {
             let train_score = training.evaluate(&self.config.metric);
             let mut validation_score = None;
-            if let Some(ref validation) = self.config.validation {
+            if let Some(ref validate) = self.config.validate {
                 validation_score =
-                    Some(validation.validate(&ensemble, &self.config.metric));
+                    Some(validate.validate(&ensemble, &self.config.metric));
             }
 
             if let Some(validation_score) = validation_score {
@@ -166,17 +163,20 @@ mod test {
         dataset.load(f).unwrap();
 
         let config = Config {
+            train: dataset,
+            test: None,
             trees: 1,
+            early_stop: 100,
             learning_rate: 0.1,
             max_leaves: 10,
             min_samples_per_leaf: 1,
             thresholds: 256,
             print_metric: true,
             print_tree: false,
-            metric: NDCGScorer::new(10),
-            validation: None,
+            metric: Box::new(NDCGScorer::new(10)),
+            validate: None,
         };
-        let lambdamart = LambdaMART::new(dataset, config);
+        let lambdamart = LambdaMART::new(config);
         lambdamart.init().unwrap();
         lambdamart.learn().unwrap();
     }

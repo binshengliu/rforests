@@ -1,71 +1,70 @@
-pub mod dataset;
-pub mod histogram;
 pub mod lambdamart;
-pub mod regression_tree;
 
-use util::Result;
+use clap::{App, Arg, ArgMatches, SubCommand};
 
-#[derive(Debug, Deserialize)]
-pub struct Args {
-    flag_ranking: bool,
-    flag_config: String,
-    flag_train: String,
-    flag_validation: String,
-    flag_output: String,
-
-    flag_help: bool,
+pub fn main<'a>(matches: &ArgMatches<'a>) {
+    match matches.subcommand_name() {
+        Some("lambdamart") => lambdamart::main(
+            matches.subcommand_matches("lambdamart").unwrap(),
+        ),
+        _ => (),
+    }
 }
 
-pub const USAGE: &'static str = "
-Train a leaner
+/// Returns the train command.
+pub fn clap_command<'a, 'b>() -> App<'a, 'b> {
+    let train_command = SubCommand::with_name("train")
+        .about("Train an learning algorithm")
+        .subcommand(lambdamart::clap_command());
 
-Usage:
-    rforests train [--ranking] [--config <file>] --train <file> [--validation <file>] [--output <file>]
-    rforests train (-h | --help)
-
-Options:
-    -h, --help                             Display this message
-    -r, --ranking                          Support ranking
-    -c <file>, --config <file>             Specify config file
-    -o <file>, --output <file>             Specify output file
-    -t <file>, --train <file>              Specify training input file
-    -v <file>, --validation <validation>   Specify validation input file
-";
-
-pub fn execute(args: Args) -> Result<()> {
-    debug!("rforests train args: {:?}", args);
-    lambdamart(&args.flag_train)?;
-    Ok(())
+    train_command
 }
 
-pub fn lambdamart(path: &str) -> Result<()> {
-    use std::fs::File;
-    use train::dataset::*;
-    use train::lambdamart::*;
-    use metric::*;
+/// Returns the common arguments for a learning algorithm. The display
+/// order of this type of arguments ranges from 1 to 100.
+fn common_args<'a, 'b>() -> Vec<Arg<'a, 'b>> {
+    let common_args = vec![
+        Arg::with_name("train-file")
+            .short("t")
+            .long("train")
+            .value_name("FILE")
+            .takes_value(true)
+            .empty_values(false)
+            .required(true)
+            .display_order(1)
+            .help("Training file"),
+        Arg::with_name("validate-file")
+            .short("v")
+            .long("validate")
+            .value_name("FILE")
+            .takes_value(true)
+            .empty_values(false)
+            .display_order(2)
+            .help("Validating file"),
+        Arg::with_name("test-file")
+            .short("T")
+            .long("test")
+            .value_name("FILE")
+            .takes_value(true)
+            .empty_values(false)
+            .display_order(3)
+            .help("Testing file"),
+        Arg::with_name("metric")
+            .short("m")
+            .long("metric")
+            .possible_values(&["NDCG", "DCG"])
+            .default_value("NDCG")
+            .display_order(4)
+            .help("Metric to optimize on the training data"),
+        Arg::with_name("metric-k")
+            .short("k")
+            .long("metric-k")
+            .value_name("NUM")
+            .requires("metric")
+            .default_value("10")
+            .display_order(5)
+            .help("K value for metrics"),
+    ];
 
-    let max_bins = 256;
-    let f = File::open(path)?;
-    let mut dataset = DataSet::new(max_bins);
-    dataset.load(f).unwrap();
-
-    let v = File::open("/home/lbs/code/rforests/data/valid.txt")?;
-    let mut validation = DataSet::new(256);
-    validation.load(v).unwrap();
-
-    let config = Config {
-        trees: 1000,
-        learning_rate: 0.1,
-        max_leaves: 10,
-        min_samples_per_leaf: 1,
-        thresholds: 256,
-        print_metric: true,
-        print_tree: false,
-        metric: NDCGScorer::new(10),
-        validation: Some(validation),
-    };
-    let lambdamart = LambdaMART::new(dataset, config);
-    lambdamart.init().unwrap();
-    lambdamart.learn().unwrap();
-    Ok(())
+    common_args
 }

@@ -1,5 +1,5 @@
 use std;
-use train::dataset::*;
+use super::dataset::*;
 use util::*;
 use std::rc::Rc;
 use std::cell::RefCell;
