@@ -1121,7 +1121,7 @@ mod tests {
         training.update_lambdas_weights();
 
         let sample = TrainingSample::from(&training);
-        let (fid, threshold, s, left, right) = sample.split(1).unwrap();
+        let (fid, threshold, _s, _left, _right) = sample.split(1).unwrap();
         assert_eq!(fid, 1);
         assert_eq!(threshold, 1.0);
     }

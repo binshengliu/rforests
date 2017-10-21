@@ -6,21 +6,15 @@
 extern crate clap;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
 extern crate docopt;
 extern crate env_logger;
 
-use std::env;
-use clap::{App, Arg, SubCommand};
+use clap::App;
 
 pub mod util;
 pub mod format;
 pub mod metric;
 mod train;
-
-use util::Result;
 
 pub fn main() {
     env_logger::init().unwrap();
