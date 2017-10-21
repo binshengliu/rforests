@@ -282,7 +282,7 @@ impl DataSet {
     /// # Examples
     ///
     /// ```
-    /// use rforests::train::dataset::DataSet;
+    /// use rforests::train::lambdamart::dataset::DataSet;
     ///
     /// let _dataset = DataSet::new(3);
     /// ```
@@ -321,7 +321,7 @@ impl DataSet {
     /// # Examples
     ///
     /// ```
-    /// use rforests::train::dataset::DataSet;
+    /// use rforests::train::lambdamart::dataset::DataSet;
     ///
     /// let s = "3.0 qid:1 1:5.0
     /// 2.0 qid:2 1:7.0
@@ -367,7 +367,7 @@ impl DataSet {
     /// # Examples
     ///
     /// ```
-    /// use rforests::train::dataset::DataSet;
+    /// use rforests::train::lambdamart::dataset::DataSet;
     ///
     /// let data = vec![
     ///     // label, qid, values
@@ -409,7 +409,7 @@ impl DataSet {
     /// # Examples
     ///
     /// ```
-    /// use rforests::train::dataset::DataSet;
+    /// use rforests::train::lambdamart::dataset::DataSet;
     ///
     /// let data = vec![
     ///     // label, qid, values
@@ -432,7 +432,7 @@ impl DataSet {
     /// # Examples
     ///
     /// ```
-    /// use rforests::train::dataset::DataSet;
+    /// use rforests::train::lambdamart::dataset::DataSet;
     ///
     /// let data = vec![
     ///     // label, qid, values
@@ -456,7 +456,7 @@ impl DataSet {
     /// # Examples
     ///
     /// ```
-    /// use rforests::train::dataset::DataSet;
+    /// use rforests::train::lambdamart::dataset::DataSet;
     ///
     /// let data = vec![
     ///     // label, qid, values
@@ -481,7 +481,7 @@ impl DataSet {
     /// # Examples
     ///
     /// ```
-    /// use rforests::train::dataset::DataSet;
+    /// use rforests::train::lambdamart::dataset::DataSet;
     ///
     /// let data = vec![
     ///     // label, qid, values

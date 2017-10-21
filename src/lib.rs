@@ -14,7 +14,7 @@ use clap::App;
 pub mod util;
 pub mod format;
 pub mod metric;
-mod train;
+pub mod train;
 
 pub fn main() {
     env_logger::init().unwrap();

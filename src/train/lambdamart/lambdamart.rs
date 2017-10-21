@@ -34,9 +34,9 @@ impl LambdaMART {
     /// # use rforests::util::Result;
     /// # pub fn lambdamart(train_path: &str, valid_path: &str) -> Result<()> {
     ///     use std::fs::File;
-    ///     use rforests::train::dataset::*;
-    ///     use rforests::train::lambdamart::*;
-    ///     use rforests::metric::*;
+    ///     use rforests::train::lambdamart::dataset::*;
+    ///     use rforests::train::lambdamart::lambdamart::*;
+    ///     use rforests::metric;
     ///
     ///     let max_bins = 256;
     ///     let f = File::open(train_path)?;
@@ -48,6 +48,7 @@ impl LambdaMART {
     ///     validate.load(v).unwrap();
     ///
     ///     let config = Config {
+    ///         train: dataset,
     ///         trees: 1000,
     ///         learning_rate: 0.1,
     ///         max_leaves: 10,
@@ -55,10 +56,12 @@ impl LambdaMART {
     ///         thresholds: 256,
     ///         print_metric: true,
     ///         print_tree: false,
-    ///         metric: NDCGScorer::new(10),
+    ///         metric: metric::new("NDCG", 10).unwrap(),
     ///         validate: Some(validate),
+    ///         test: None,
+    ///         early_stop: 100,
     ///     };
-    ///     let lambdamart = LambdaMART::new(dataset, config);
+    ///     let lambdamart = LambdaMART::new(config);
     ///     lambdamart.init()?;
     ///     lambdamart.learn()?;
     /// #    Ok(())
