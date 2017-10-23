@@ -103,47 +103,53 @@ impl LambdaMART {
 
             self.ensemble.push(tree);
 
-            print_metric(
-                i,
-                &self.ensemble,
-                &training,
-                &self.config.validate,
-                &self.config.metric,
-            );
+            self.print_metric(i, &training);
         }
         Ok(())
     }
-}
 
-/// Print metric header.
-fn print_metric_header(metric: &Box<MetricScorer>) {
-    println!(
-        "{:<7} | {:>9} | {:>9}",
-        "#iter",
-        metric.name() + "-T",
-        metric.name() + "-V"
-    );
-}
+    pub fn evaluate(&self, dataset: &DataSet) -> f64 {
+        dataset.validate(&self.ensemble, &self.config.metric)
+    }
 
-/// Print metric of each iteration.
-fn print_metric(
-    iteration: usize,
-    ensemble: &Ensemble,
-    training: &TrainingSet,
-    validate: &Option<DataSet>,
-    metric: &Box<MetricScorer>,
-) {
-    let train_score = training.evaluate(&metric);
-    if let &Some(ref validate) = validate {
-        let validation_score = validate.validate(&ensemble, metric);
-        println!(
-            "{:<7} | {:>9.4} | {:>9.4}",
-            iteration,
-            train_score,
-            validation_score
-        );
-    } else {
-        println!("{:<7} | {:>9.4} | {:>9.4}", iteration, train_score, "");
+    fn print(&self, msg: &str) {
+        if self.config.print_metric {
+            println!("{}", msg);
+        }
+    }
+
+    /// Print metric header.
+    fn print_metric_header(&self) {
+        self.print(&format!(
+            "{:<7} | {:>9} | {:>9}",
+            "#iter",
+            self.config.metric.name() + "-T",
+            self.config.metric.name() + "-V"
+        ));
+    }
+
+    /// Print metric of each iteration.
+    fn print_metric(&self, iteration: usize, training: &TrainingSet) {
+        let train_score = training.evaluate(&self.config.metric);
+        if let Some(ref validate) = self.config.validate {
+            let validation_score =
+                validate.validate(&self.ensemble, &self.config.metric);
+            let s = format!(
+                "{:<7} | {:>9.4} | {:>9.4}",
+                iteration,
+                train_score,
+                validation_score
+            );
+            self.print(&s);
+        } else {
+            let s = format!(
+                "{:<7} | {:>9.4} | {:>9.4}",
+                iteration,
+                train_score,
+                ""
+            );
+            self.print(&s);
+        }
     }
 }
 
