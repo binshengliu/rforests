@@ -112,8 +112,8 @@ impl<'a> Iterator for QueryIter<'a> {
 pub struct DataSet {
     nfeatures: usize,
     instances: Vec<Instance>,
-    // Start indices of the queries
-    query_start: Vec<usize>,
+    // Group by queries. (Start index, Query Length).
+    queries: Vec<(usize, usize)>,
 }
 
 impl std::iter::FromIterator<(Value, Id, Vec<Value>)> for DataSet {
@@ -144,22 +144,30 @@ impl std::iter::FromIterator<(Value, Id, Vec<Value>)> for DataSet {
         T: IntoIterator<Item = (Value, Id, Vec<Value>)>,
     {
         let mut instances = Vec::new();
-        let mut query_start = vec![0];
         let mut nfeatures = 0;
+        let mut queries = Vec::new();
+        let mut query_start = 0;
+        let mut query_len = 0;
         for (label, qid, values) in iter {
             let instance = Instance::from((label, qid, values));
             nfeatures =
                 usize::max(nfeatures, instance.max_feature_id() as usize);
-            if qid != *query_start.last().unwrap() {
-                query_start.push(instances.len());
-            }
             instances.push(instance);
+
+            if qid != instances[query_start].qid() {
+                queries.push((query_start, query_len));
+                query_start = instances.len() - 1;
+                query_len = 1;
+            } else {
+                query_len += 1;
+            }
         }
+        queries.push((query_start, query_len));
 
         DataSet {
             instances: instances,
             nfeatures: nfeatures,
-            query_start: query_start,
+            queries: queries,
         }
     }
 }
@@ -189,18 +197,27 @@ impl DataSet {
         R: ::std::io::Read,
     {
         let mut instances = Vec::new();
-        let mut query_start = vec![0];
         let mut nfeatures = 0;
+        let mut queries = Vec::new();
+        let mut query_start = 0;
+        let mut query_len = 0;
         debug!("Loading data...");
         for instance_result in SvmLightFile::instances(reader) {
             let instance = instance_result?;
             nfeatures =
                 usize::max(nfeatures, instance.max_feature_id() as usize);
-            if instance.qid() != *query_start.last().unwrap() {
-                query_start.push(instances.len());
-            }
+            let qid = instance.qid();
             instances.push(instance);
+
+            if qid != instances[query_start].qid() {
+                queries.push((query_start, query_len));
+                query_start = instances.len() - 1;
+                query_len = 1;
+            } else {
+                query_len += 1;
+            }
         }
+        queries.push((query_start, query_len));
         debug!(
             "Loaded {} instances, {} features.",
             instances.len(),
@@ -210,7 +227,7 @@ impl DataSet {
         Ok(DataSet {
             instances: instances,
             nfeatures: nfeatures,
-            query_start: query_start,
+            queries: queries,
         })
     }
 
@@ -292,11 +309,15 @@ impl DataSet {
     /// assert_eq!(iter.next(), Some((2, vec![2])));
     /// assert_eq!(iter.next(), Some((5, vec![3])));
     /// ```
-    pub fn query_iter(&self) -> QueryIter {
-        QueryIter {
-            dataset: self,
-            index: 0,
-        }
+    pub fn query_iter<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (Id, Vec<Id>)> + 'a {
+        self.queries.iter().map(move |&(start, len)| {
+            (
+                self[start].qid(),
+                (start..(start + len)).collect::<Vec<usize>>(),
+            )
+        })
     }
 
     pub fn validate(
@@ -364,5 +385,7 @@ mod test {
             dataset.instances[2],
             Instance::new(0.0, 3865, vec![0.289474, 0.014085, 0.4, 0.0, 0.085227])
         );
+        assert_eq!(dataset.queries[0], (0, 2));
+        assert_eq!(dataset.queries[1], (2, 1));
     }
 }
