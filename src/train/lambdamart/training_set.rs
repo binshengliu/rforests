@@ -1,5 +1,4 @@
 use std::cell::Cell;
-use metric::NDCGScorer;
 use metric::MetricScorer;
 use super::histogram::*;
 use util::{Id, Value};
@@ -309,90 +308,74 @@ impl<'d> TrainingSet<'d> {
     }
 
     /// Updates the lambda and weight for each instance.
-    pub fn update_lambdas_weights(&mut self) {
-        let ndcg = NDCGScorer::new(10);
-
-        for (lambda, weight) in self.lambdas.iter_mut().zip(
-            self.weights.iter_mut(),
-        )
-        {
-            *lambda = 0.0;
-            *weight = 0.0;
+    ///
+    /// 1. For each query, rank the instances by the scores of our
+    /// model.
+    ///
+    /// 2. Compute the change of scores by swaping each instance with
+    /// another
+    ///
+    /// 3. Update lambda and weight according to the formulas
+    pub fn update_lambdas_weights<'a, 'b>(
+        &'a mut self,
+        metric: &Box<MetricScorer>,
+    ) {
+        for (l, w) in self.lambdas.iter_mut().zip(self.weights.iter_mut()) {
+            *l = 0.0;
+            *w = 0.0;
         }
-        for (qid, query) in self.dataset.query_iter() {
+
+        for (qid, mut query) in self.dataset.query_iter() {
             debug!("Update lambdas for qid {}", qid);
-            self.update_lambda_weight_by_query(&query, &ndcg);
-        }
-    }
+            use std::cmp::Ordering;
 
-    /// Updates the lambda and weight for each instance grouped by query.
-    fn update_lambda_weight_by_query<S>(&mut self, query: &Vec<Id>, metric: &S)
-    where
-        S: MetricScorer,
-    {
-        use std::cmp::Ordering;
+            let mut rank_list: Vec<_> = query
+                .iter()
+                .map(|&index| {
+                    (
+                        index,
+                        self.dataset[index].label(),
+                        self.model_scores[index].get(),
+                    )
+                })
+                .collect();
 
-        let mut query = query.clone();
+            // Rank by the scores of our model.
+            rank_list.sort_by(|&(_, _, score1), &(_, _, score2)| {
+                score2.partial_cmp(&score1).unwrap_or(Ordering::Equal)
+            });
 
-        // Rank the instances by the scores of our model.
-        query.sort_by(|&index1, &index2| {
-            // Descending
-            self.model_scores[index2]
-                .partial_cmp(&self.model_scores[index1])
-                .unwrap_or(Ordering::Equal)
-        });
+            let ranked_labels: Vec<_> =
+                rank_list.iter().map(|&(_, label, _)| label).collect();
 
-        // Organize the original labels by the scores of our
-        // model. For example, we have three instances.
-        //
-        // | Index | Label | Our Score |
-        // |-------+-------+-----------|
-        // |     0 |   5.0 |       2.0 |
-        // |     1 |   4.0 |       5.0 |
-        // |     2 |   3.0 |       4.0 |
-        //
-        // Ranked by our scores
-        //
-        // | Index | Label | Our Score |
-        // |-------+-------+-----------|
-        // |     1 |   4.0 |       5.0 |
-        // |     2 |   3.0 |       4.0 |
-        // |     0 |   5.0 |       2.0 |
-        //
-        // labes_sorted_by_scores: [4.0, 3.0, 5.0];
-        let labels_sorted_by_scores: Vec<Value> = query
-            .iter()
-            .map(|&index| self.dataset[index].label())
-            .collect();
-        let metric_delta = metric.delta(&labels_sorted_by_scores);
+            let metric_delta = metric.delta(&ranked_labels);
 
-        let k = metric.get_k();
-        for (metric_index1, &index1) in query.iter().enumerate() {
-            for (metric_index2, &index2) in query.iter().enumerate() {
-                if metric_index1 > k && metric_index2 > k {
-                    break;
-                }
-
-                if self.dataset[index1].label() <=
-                    self.dataset[index2].label()
+            let k = metric.get_k();
+            for (metric_index1, &(index1, label1, score1)) in
+                rank_list.iter().enumerate()
+            {
+                for (metric_index2, &(index2, label2, score2)) in
+                    rank_list.iter().enumerate()
                 {
-                    continue;
+                    if metric_index1 > k && metric_index2 > k {
+                        break;
+                    }
+
+                    if label1 <= label2 {
+                        continue;
+                    }
+
+                    let metric_delta_value =
+                        metric_delta[metric_index1][metric_index2].abs();
+                    let rho = 1.0 / (1.0 + (score1 - score2).exp());
+                    let lambda = metric_delta_value * rho;
+                    let weight = rho * (1.0 - rho) * metric_delta_value;
+
+                    self.lambdas[index1] += lambda;
+                    self.weights[index1] += weight;
+                    self.lambdas[index2] -= lambda;
+                    self.weights[index2] += weight;
                 }
-
-                let metric_delta_value =
-                    metric_delta[metric_index1][metric_index2].abs();
-                let rho = 1.0 /
-                    (1.0 +
-                         (self.model_scores[index1].get() -
-                              self.model_scores[index2].get())
-                             .exp());
-                let lambda = metric_delta_value * rho;
-                let weight = rho * (1.0 - rho) * metric_delta_value;
-
-                self.lambdas[index1] += lambda;
-                self.weights[index1] += weight;
-                self.lambdas[index2] -= lambda;
-                self.weights[index2] += weight;
             }
         }
     }
@@ -614,6 +597,7 @@ impl<'t, 'd> std::fmt::Display for TrainingSample<'t, 'd> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use metric;
 
     #[test]
     fn test_instance_interface() {
@@ -682,7 +666,7 @@ mod tests {
         let dataset: DataSet = data.into_iter().collect();
 
         let mut training = TrainingSet::new(&dataset, 3);
-        training.update_lambdas_weights();
+        training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
         // The values are verified by hand. This test is kept as a
         // guard for future modifications.
@@ -734,7 +718,7 @@ mod tests {
         let dataset: DataSet = data.into_iter().collect();
 
         let mut training = TrainingSet::new(&dataset, 3);
-        training.update_lambdas_weights();
+        training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
         let sample = TrainingSample::from(&training);
         let (fid, threshold, _s, _left, _right) = sample.split(1).unwrap();
@@ -764,7 +748,7 @@ mod tests {
         // 1 2 3 | 4 5 6 7 8 9
         // 1 2 3 4 5 6 | 7 8 9
         let mut training = TrainingSet::new(&dataset, 3);
-        training.update_lambdas_weights();
+        training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
         let sample = TrainingSample::from(&training);
         assert!(sample.split(9).is_none());

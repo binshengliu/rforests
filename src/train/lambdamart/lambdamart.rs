@@ -83,7 +83,7 @@ impl LambdaMART {
             TrainingSet::new(&self.config.train, self.config.thresholds);
         self.print_metric_header();
         for i in 0..self.config.trees {
-            training.update_lambdas_weights();
+            training.update_lambdas_weights(&self.config.metric);
 
             let mut tree = RegressionTree::new(
                 self.config.learning_rate,

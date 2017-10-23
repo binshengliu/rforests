@@ -260,6 +260,7 @@ impl std::ops::DerefMut for Ensemble {
 #[cfg(test)]
 mod test {
     use super::*;
+    use metric;
 
     #[test]
     fn test_tree_fitting() {
@@ -282,7 +283,7 @@ mod test {
         let max_leaves = 10;
 
         for _ in 0..10 {
-            training.update_lambdas_weights();
+            training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
             // println!("{:?}", training.lambdas);
             // println!("{:?}", training.weights);
