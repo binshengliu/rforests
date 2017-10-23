@@ -67,7 +67,10 @@ impl LambdaMART {
     /// # }
     /// ```
     pub fn new(config: Config) -> LambdaMART {
-        LambdaMART { config: config, ensemble: Ensemble::new() }
+        LambdaMART {
+            config: config,
+            ensemble: Ensemble::new(),
+        }
     }
 
     /// Initializes LambdaMART algorithm.
@@ -155,6 +158,7 @@ mod test {
         let path = "./data/train-lite.txt";
         let f = File::open(path).unwrap();
         let dataset = DataSet::load(f).unwrap();
+        let validate_set = dataset.clone();
 
         let config = Config {
             train: dataset,
@@ -165,7 +169,7 @@ mod test {
             max_leaves: 10,
             min_samples_per_leaf: 1,
             thresholds: 256,
-            print_metric: true,
+            print_metric: false,
             print_tree: false,
             metric: Box::new(NDCGScorer::new(10)),
             validate: None,
@@ -173,5 +177,8 @@ mod test {
         let mut lambdamart = LambdaMART::new(config);
         lambdamart.init().unwrap();
         lambdamart.learn().unwrap();
+        // This is a verified result. Use as a guard for future
+        // modifications.
+        assert_eq!(lambdamart.evaluate(&validate_set), 0.5694960535660895);
     }
 }

@@ -6,7 +6,7 @@ use train::lambdamart::regression_tree::Ensemble;
 use metric::*;
 
 /// An instance of a label, a qid, and a group of feature values.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Instance {
     qid: Id,
     label: Value, // or label
@@ -108,6 +108,7 @@ impl<'a> Iterator for QueryIter<'a> {
 /// A collection type containing a data set. The DataSet is a static
 /// data structure. See also TrainingDataSet which is a mutable data
 /// structure that its label values get updated after each training.
+#[derive(Clone)]
 pub struct DataSet {
     nfeatures: usize,
     instances: Vec<Instance>,
