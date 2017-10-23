@@ -112,6 +112,8 @@ impl<'a> Iterator for QueryIter<'a> {
 pub struct DataSet {
     nfeatures: usize,
     instances: Vec<Instance>,
+    // Start indices of the queries
+    query_start: Vec<usize>,
 }
 
 impl std::iter::FromIterator<(Value, Id, Vec<Value>)> for DataSet {
@@ -142,17 +144,22 @@ impl std::iter::FromIterator<(Value, Id, Vec<Value>)> for DataSet {
         T: IntoIterator<Item = (Value, Id, Vec<Value>)>,
     {
         let mut instances = Vec::new();
+        let mut query_start = vec![0];
         let mut nfeatures = 0;
         for (label, qid, values) in iter {
             let instance = Instance::from((label, qid, values));
             nfeatures =
                 usize::max(nfeatures, instance.max_feature_id() as usize);
+            if qid != *query_start.last().unwrap() {
+                query_start.push(instances.len());
+            }
             instances.push(instance);
         }
 
         DataSet {
             instances: instances,
             nfeatures: nfeatures,
+            query_start: query_start,
         }
     }
 }
@@ -182,12 +189,16 @@ impl DataSet {
         R: ::std::io::Read,
     {
         let mut instances = Vec::new();
+        let mut query_start = vec![0];
         let mut nfeatures = 0;
         debug!("Loading data...");
         for instance_result in SvmLightFile::instances(reader) {
             let instance = instance_result?;
             nfeatures =
                 usize::max(nfeatures, instance.max_feature_id() as usize);
+            if instance.qid() != *query_start.last().unwrap() {
+                query_start.push(instances.len());
+            }
             instances.push(instance);
         }
         debug!(
@@ -199,6 +210,7 @@ impl DataSet {
         Ok(DataSet {
             instances: instances,
             nfeatures: nfeatures,
+            query_start: query_start,
         })
     }
 
