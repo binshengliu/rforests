@@ -7,6 +7,7 @@ use super::training_set::*;
 /// A instance of LambdaMART algorithm.
 pub struct LambdaMART {
     config: Config,
+    ensemble: Ensemble,
 }
 
 /// Configurable options for LambdaMART.
@@ -59,14 +60,14 @@ impl LambdaMART {
     ///         test: None,
     ///         early_stop: 100,
     ///     };
-    ///     let lambdamart = LambdaMART::new(config);
+    ///     let mut lambdamart = LambdaMART::new(config);
     ///     lambdamart.init()?;
     ///     lambdamart.learn()?;
     /// #    Ok(())
     /// # }
     /// ```
     pub fn new(config: Config) -> LambdaMART {
-        LambdaMART { config: config }
+        LambdaMART { config: config, ensemble: Ensemble::new() }
     }
 
     /// Initializes LambdaMART algorithm.
@@ -76,10 +77,10 @@ impl LambdaMART {
 
     /// Learns from the given training data, using the configuration
     /// specified when creating LambdaMART instance.
-    pub fn learn(&self) -> Result<()> {
-        let mut ensemble = Ensemble::new();
-        let mut training = TrainingSet::new(&self.config.train, self.config.thresholds);
-        self.print_metric_header();
+    pub fn learn(&mut self) -> Result<()> {
+        let mut training =
+            TrainingSet::new(&self.config.train, self.config.thresholds);
+        print_metric_header(&self.config.metric);
         for i in 0..self.config.trees {
             training.update_lambdas_weights();
 
@@ -97,56 +98,49 @@ impl LambdaMART {
                 tree.print();
             }
 
-            ensemble.push(tree);
+            self.ensemble.push(tree);
 
-            self.print_metric(i, &training, &ensemble);
+            print_metric(
+                i,
+                &self.ensemble,
+                &training,
+                &self.config.validate,
+                &self.config.metric,
+            );
         }
         Ok(())
     }
+}
 
-    /// Print metric header.
-    fn print_metric_header(&self) {
-        if self.config.print_metric {
-            println!(
-                "{:<7} | {:>9} | {:>9}",
-                "#iter",
-                self.config.metric.name() + "-T",
-                self.config.metric.name() + "-V"
-            );
-        }
-    }
+/// Print metric header.
+fn print_metric_header(metric: &Box<MetricScorer>) {
+    println!(
+        "{:<7} | {:>9} | {:>9}",
+        "#iter",
+        metric.name() + "-T",
+        metric.name() + "-V"
+    );
+}
 
-    /// Print metric of each iteration.
-    fn print_metric(
-        &self,
-        iteration: usize,
-        training: &TrainingSet,
-        ensemble: &Ensemble,
-    ) {
-        if self.config.print_metric {
-            let train_score = training.evaluate(&self.config.metric);
-            let mut validation_score = None;
-            if let Some(ref validate) = self.config.validate {
-                validation_score =
-                    Some(validate.validate(&ensemble, &self.config.metric));
-            }
-
-            if let Some(validation_score) = validation_score {
-                println!(
-                    "{:<7} | {:>9.4} | {:>9.4}",
-                    iteration,
-                    train_score,
-                    validation_score
-                );
-            } else {
-                println!(
-                    "{:<7} | {:>9.4} | {:>9.4}",
-                    iteration,
-                    train_score,
-                    ""
-                );
-            }
-        }
+/// Print metric of each iteration.
+fn print_metric(
+    iteration: usize,
+    ensemble: &Ensemble,
+    training: &TrainingSet,
+    validate: &Option<DataSet>,
+    metric: &Box<MetricScorer>,
+) {
+    let train_score = training.evaluate(&metric);
+    if let &Some(ref validate) = validate {
+        let validation_score = validate.validate(&ensemble, metric);
+        println!(
+            "{:<7} | {:>9.4} | {:>9.4}",
+            iteration,
+            train_score,
+            validation_score
+        );
+    } else {
+        println!("{:<7} | {:>9.4} | {:>9.4}", iteration, train_score, "");
     }
 }
 
@@ -176,7 +170,7 @@ mod test {
             metric: Box::new(NDCGScorer::new(10)),
             validate: None,
         };
-        let lambdamart = LambdaMART::new(config);
+        let mut lambdamart = LambdaMART::new(config);
         lambdamart.init().unwrap();
         lambdamart.learn().unwrap();
     }

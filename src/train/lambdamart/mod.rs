@@ -137,7 +137,7 @@ pub fn main<'a>(matches: &ArgMatches<'a>) {
     let param = LambdaMARTParameter::parse(matches);
     param.print();
 
-    let lambdamart = LambdaMART::new(param.config());
+    let mut lambdamart = LambdaMART::new(param.config());
     lambdamart.init().unwrap();
     lambdamart.learn().unwrap();
 }
