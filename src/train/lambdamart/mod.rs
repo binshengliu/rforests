@@ -67,15 +67,15 @@ impl<'a> LambdaMARTParameter<'a> {
     pub fn config(&self) -> Config {
         let train_file =
             File::open(self.train_file_path).unwrap_or_else(|_e| exit(1));
-        let train_dataset = DataSet::load(train_file).unwrap_or_else(|_e| exit(1));
+        let train_set = DataSet::load(train_file).unwrap_or_else(|_e| exit(1));
 
-        let validate = self.validate_file_path.map(|path| {
+        let validate_set = self.validate_file_path.map(|path| {
             let file = File::open(path).unwrap_or_else(|_e| exit(1));
             let dataset = DataSet::load(file).unwrap_or_else(|_e| exit(1));
             dataset
         });
 
-        let test = self.test_file_path.map(|path| {
+        let test_set = self.test_file_path.map(|path| {
             let file = File::open(path).unwrap_or_else(|_e| exit(1));
             let dataset = DataSet::load(file).unwrap_or_else(|_e| exit(1));
             dataset
@@ -85,16 +85,16 @@ impl<'a> LambdaMARTParameter<'a> {
         let metric = metric::new(self.metric, self.metric_k).unwrap();
 
         Config {
-            train: train_dataset,
-            test: test,
-            trees: 1000,
-            learning_rate: 0.1,
-            max_leaves: 10,
-            min_samples_per_leaf: 1,
-            thresholds: 256,
+            train: train_set,
+            test: test_set,
+            trees: self.trees,
+            learning_rate: self.shrinkage,
+            max_leaves: self.leaves,
+            min_samples_per_leaf: self.min_leaf_support,
+            thresholds: self.thresholds_count,
             print_metric: true,
             metric: metric,
-            validate: validate,
+            validate: validate_set,
             early_stop: self.early_stop,
         }
     }
