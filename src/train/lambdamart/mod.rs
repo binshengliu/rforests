@@ -93,7 +93,6 @@ impl<'a> LambdaMARTParameter<'a> {
             min_samples_per_leaf: 1,
             thresholds: 256,
             print_metric: true,
-            print_tree: false,
             metric: metric,
             validate: validate,
             early_stop: self.early_stop,

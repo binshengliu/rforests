@@ -24,7 +24,6 @@ pub struct Config {
     pub min_samples_per_leaf: usize,
     pub early_stop: usize,
     pub print_metric: bool,
-    pub print_tree: bool,
 }
 
 impl LambdaMART {
@@ -54,7 +53,6 @@ impl LambdaMART {
     ///         min_samples_per_leaf: 1,
     ///         thresholds: 256,
     ///         print_metric: true,
-    ///         print_tree: false,
     ///         metric: metric::new("NDCG", 10).unwrap(),
     ///         validate: Some(validate),
     ///         test: None,
@@ -83,7 +81,7 @@ impl LambdaMART {
     pub fn learn(&mut self) -> Result<()> {
         let mut training =
             TrainingSet::new(&self.config.train, self.config.thresholds);
-        print_metric_header(&self.config.metric);
+        self.print_metric_header();
         for i in 0..self.config.trees {
             training.update_lambdas_weights();
 
@@ -96,10 +94,6 @@ impl LambdaMART {
             // The scores of the model are updated when the tree node
             // does not split and becomes a leaf.
             tree.fit(&training);
-
-            if self.config.print_tree {
-                tree.print();
-            }
 
             self.ensemble.push(tree);
 
@@ -176,7 +170,6 @@ mod test {
             min_samples_per_leaf: 1,
             thresholds: 256,
             print_metric: false,
-            print_tree: false,
             metric: Box::new(NDCGScorer::new(10)),
             validate: None,
         };
