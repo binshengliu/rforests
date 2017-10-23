@@ -155,6 +155,7 @@ impl std::iter::FromIterator<(Value, Id, Vec<Value>)> for DataSet {
         }
     }
 }
+
 impl DataSet {
     /// Load data set from a reader.
     ///
@@ -198,29 +199,6 @@ impl DataSet {
             instances: instances,
             nfeatures: nfeatures,
         })
-    }
-
-    /// Returns the number of instances in the data set, also referred
-    /// to as its 'length'.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rforests::train::dataset::DataSet;
-    ///
-    /// let data = vec![
-    ///     // label, qid, values
-    ///     (3.0, 1, vec![5.0]),
-    ///     (2.0, 2, vec![7.0]),
-    ///     (3.0, 3, vec![3.0]),
-    /// ];
-    ///
-    /// let mut dataset: DataSet = data.into_iter().collect();
-    ///
-    /// assert_eq!(dataset.len(), 3);
-    /// ```
-    pub fn len(&self) -> usize {
-        self.instances.len()
     }
 
     /// Returns an iterator over the feature ids in the data set.
