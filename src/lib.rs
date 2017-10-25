@@ -8,6 +8,7 @@ extern crate clap;
 extern crate log;
 extern crate docopt;
 extern crate env_logger;
+extern crate cpuprofiler;
 
 use clap::App;
 
