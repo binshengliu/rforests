@@ -1,6 +1,7 @@
 #![feature(ord_max_min)]
 #![feature(conservative_impl_trait)]
 #![feature(unboxed_closures)]
+#![feature(test)]
 
 #[macro_use]
 extern crate clap;
@@ -9,6 +10,7 @@ extern crate log;
 extern crate docopt;
 extern crate env_logger;
 extern crate cpuprofiler;
+extern crate test;
 
 use clap::App;
 

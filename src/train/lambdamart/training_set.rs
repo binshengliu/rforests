@@ -597,6 +597,7 @@ impl<'t, 'd> std::fmt::Display for TrainingSample<'t, 'd> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test::Bencher;
     use metric;
 
     #[test]
@@ -758,5 +759,18 @@ mod tests {
         assert_eq!(threshold, 3.0 + 2.0 / 3.0);
 
         assert!(left.split(2).is_none());
+    }
+
+    #[bench]
+    fn bench_split(b: &mut Bencher) {
+        let path = "./data/train-lite.txt";
+        let f = std::fs::File::open(path).unwrap();
+        let dataset = DataSet::load(f).unwrap();
+
+        let mut training = TrainingSet::new(&dataset, 256);
+        training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
+
+        let sample = TrainingSample::from(&training);
+        b.iter(|| sample.split(1).unwrap());
     }
 }
