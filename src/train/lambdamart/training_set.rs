@@ -6,6 +6,7 @@ use std::cmp::Ordering::*;
 use train::dataset::*;
 use std::collections::{BinaryHeap, HashMap};
 use std::cmp::Ordering;
+use std::sync::{Arc, Mutex};
 
 /// A Mapping from the index of a Instance in the DataSet into a
 /// threshold interval.
@@ -541,19 +542,22 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
     /// the best among all the features.
     fn best_split(&self, min_leaf_count: usize) -> Option<SplitPos> {
         // (fid, threshold, s)
-        let mut splits: BinaryHeap<SplitPos> = BinaryHeap::new();
-        for fid in self.fid_iter() {
-            let feature_histogram = self.feature_histogram(fid);
-            let split = feature_histogram.best_split(min_leaf_count);
-            match split {
-                Some((threshold, s)) => {
-                    splits.push(SplitPos { fid, threshold, s })
+        let splits: Arc<Mutex<BinaryHeap<SplitPos>>> =
+            Arc::new(Mutex::new(BinaryHeap::new()));
+        let mut pool = ::util::POOL.lock().unwrap();
+        pool.scoped(|scoped| for fid in self.fid_iter() {
+            let splits = splits.clone();
+            scoped.execute(move || {
+                let feature_histogram = self.feature_histogram(fid);
+                let split = feature_histogram.best_split(min_leaf_count);
+                if let Some((threshold, s)) = split {
+                    splits.lock().unwrap().push(SplitPos { fid, threshold, s })
                 }
-                None => continue,
-            }
-        }
+            })
+        });
 
-        splits.pop()
+        let mut guard = splits.lock().unwrap();
+        guard.pop()
     }
 
     /// Split self. Returns (split feature, threshold, s value, left

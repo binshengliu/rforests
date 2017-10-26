@@ -9,6 +9,9 @@ extern crate clap;
 extern crate log;
 extern crate env_logger;
 extern crate test;
+extern crate scoped_threadpool;
+#[macro_use]
+extern crate lazy_static;
 
 use clap::App;
 
