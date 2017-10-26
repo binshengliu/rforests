@@ -119,7 +119,7 @@ impl ThresholdMap {
     /// let histogram = map.histogram(data.iter().map(|&(target, _)| target));
     ///
     /// assert_eq!(histogram.variance(), 15.555555555555557);
-    pub fn histogram<I: Iterator<Item = (Id, Value, Value)>>(
+    pub fn histogram<I: Iterator<Item = (Id, Value)>>(
         &self,
         iter: I,
     ) -> Histogram {
@@ -129,7 +129,7 @@ impl ThresholdMap {
             .map(|&threshold| (threshold, 0, 0.0))
             .collect();
 
-        for (id, _feature_value, label) in iter {
+        for (id, label) in iter {
             let threshold_index = self.map[id];
 
             hist[threshold_index].1 += 1;
@@ -297,8 +297,6 @@ impl<'d> TrainingSet<'d> {
 
         // Get the map by feature id.
         let threshold_map = &self.threshold_maps[fid - 1];
-        let iter =
-            iter.map(|(id, target)| (id, self.dataset[id].value(fid), target));
         threshold_map.histogram(iter)
     }
 
