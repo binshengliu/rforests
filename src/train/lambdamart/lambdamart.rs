@@ -181,28 +181,4 @@ mod test {
         // modifications.
         assert_eq!(lambdamart.evaluate(&validate_set), 0.5694960535660895);
     }
-
-    #[bench]
-    fn test_lambda_mart_bench(b: &mut Bencher) {
-        let path = "./data/train.txt";
-        let f = File::open(path).unwrap();
-        let dataset = DataSet::load(f).unwrap();
-
-        let config = Config {
-            train: dataset,
-            test: None,
-            trees: 10,
-            early_stop: 100,
-            learning_rate: 0.1,
-            max_leaves: 10,
-            min_samples_per_leaf: 1,
-            thresholds: 256,
-            print_metric: false,
-            metric: Box::new(NDCGScorer::new(10)),
-            validate: None,
-        };
-        let mut lambdamart = LambdaMART::new(config);
-        lambdamart.init().unwrap();
-        b.iter(|| lambdamart.learn().unwrap());
-    }
 }
