@@ -7,9 +7,7 @@
 extern crate clap;
 #[macro_use]
 extern crate log;
-extern crate docopt;
 extern crate env_logger;
-extern crate cpuprofiler;
 extern crate test;
 
 use clap::App;
