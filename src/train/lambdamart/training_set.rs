@@ -124,9 +124,9 @@ impl ThresholdMap {
         iter: I,
     ) -> Histogram {
         // (threshold value, count, sum, squared_sum)
-        let mut hist: Vec<(Value, usize, Value, Value)> = self.thresholds
+        let mut hist: Vec<(Value, usize, Value)> = self.thresholds
             .iter()
-            .map(|&threshold| (threshold, 0, 0.0, 0.0))
+            .map(|&threshold| (threshold, 0, 0.0))
             .collect();
 
         for (id, _feature_value, label) in iter {
@@ -134,13 +134,11 @@ impl ThresholdMap {
 
             hist[threshold_index].1 += 1;
             hist[threshold_index].2 += label;
-            hist[threshold_index].3 += label * label;
         }
 
         for i in 1..hist.len() {
             hist[i].1 += hist[i - 1].1;
             hist[i].2 += hist[i - 1].2;
-            hist[i].3 += hist[i - 1].3;
         }
         let feature_histogram = hist.into_iter().collect();
         feature_histogram

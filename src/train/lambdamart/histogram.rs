@@ -11,9 +11,6 @@ struct HistogramBin {
 
     // Accumulated sum of all the labels of this and preceding bins.
     acc_sum: f64,
-
-    // Accumulated squared sum of all the labels of this and preceding bins.
-    acc_squared_sum: f64,
 }
 
 impl HistogramBin {
@@ -21,13 +18,11 @@ impl HistogramBin {
         threashold: f64,
         acc_count: usize,
         acc_sum: f64,
-        acc_squared_sum: f64,
     ) -> HistogramBin {
         HistogramBin {
             threashold: threashold,
             acc_count: acc_count,
             acc_sum: acc_sum,
-            acc_squared_sum: acc_squared_sum,
         }
     }
 }
@@ -124,18 +119,17 @@ impl Histogram {
 }
 
 use std::iter::FromIterator;
-impl FromIterator<(Value, usize, Value, Value)> for Histogram {
+impl FromIterator<(Value, usize, Value)> for Histogram {
     fn from_iter<T>(iter: T) -> Histogram
     where
-        T: IntoIterator<Item = (Value, usize, Value, Value)>,
+        T: IntoIterator<Item = (Value, usize, Value)>,
     {
         let bins: Vec<HistogramBin> = iter.into_iter()
-            .map(|(threshold, acc_count, acc_sum, acc_squared_sum)| {
+            .map(|(threshold, acc_count, acc_sum)| {
                 HistogramBin::new(
                     threshold,
                     acc_count,
                     acc_sum,
-                    acc_squared_sum,
                 )
             })
             .collect();
