@@ -129,11 +129,8 @@ impl ThresholdMap {
             .map(|&threshold| (threshold, 0, 0.0, 0.0))
             .collect();
 
-        for (id, feature_value, label) in iter {
+        for (id, _feature_value, label) in iter {
             let threshold_index = self.map[id];
-
-            let threshold = self.thresholds[threshold_index];
-            assert!(feature_value <= threshold);
 
             hist[threshold_index].1 += 1;
             hist[threshold_index].2 += label;
