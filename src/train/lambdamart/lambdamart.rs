@@ -149,7 +149,6 @@ impl LambdaMART {
 
 #[cfg(test)]
 mod test {
-    use test::Bencher;
     use super::*;
     use std::fs::File;
 
