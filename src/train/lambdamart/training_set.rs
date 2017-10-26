@@ -512,6 +512,10 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
         min_leaf_count: usize,
     ) -> Option<(Id, Value, f64, TrainingSample<'t, 'd>, TrainingSample<'t, 'd>)> {
         assert!(min_leaf_count > 0);
+        if self.indices.len() < min_leaf_count {
+            return None;
+        }
+
         if self.variance().abs() <= 0.000001 {
             return None;
         }
