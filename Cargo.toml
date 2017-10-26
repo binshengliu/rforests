@@ -11,3 +11,6 @@ doc = false
 env_logger = "0.4.3"
 log = "0.3.8"
 clap = "2.26.2"
+
+[profile.release]
+debug = true
