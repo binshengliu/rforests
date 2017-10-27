@@ -504,22 +504,10 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
         variance
     }
 
-    /// Split self. Returns (split feature, threshold, s value, left
-    /// child, right child). For each split, if its variance is zero,
-    /// it's non-splitable.
-    pub fn split(
-        &self,
-        min_leaf_count: usize,
-    ) -> Option<(Id, Value, f64, TrainingSample<'t, 'd>, TrainingSample<'t, 'd>)> {
-        assert!(min_leaf_count > 0);
-        if self.indices.len() < min_leaf_count {
-            return None;
-        }
-
-        if self.variance().abs() <= 0.000001 {
-            return None;
-        }
-
+    /// Find the best split of this sample. For each feature, find the
+    /// best split point that gets the best squared error. And find
+    /// the best among all the features.
+    fn best_split(&self, min_leaf_count: usize) -> Option<(usize, f64, f64)> {
         // (fid, threshold, s)
         let mut splits: Vec<(Id, Value, f64)> = Vec::new();
         for fid in self.fid_iter() {
@@ -533,32 +521,49 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
         }
 
         // Find the split with the best s value;
-        let (fid, threshold, s) = match splits.into_iter().max_by(|a, b| {
-            a.2.partial_cmp(&b.2).unwrap()
-        }) {
-            Some((fid, threshold, s)) => (fid, threshold, s),
-            None => return None,
-        };
+        splits.into_iter().max_by(
+            |a, b| a.2.partial_cmp(&b.2).unwrap(),
+        )
+    }
 
-        let mut left_indices = Vec::new();
-        let mut right_indices = Vec::new();
-        for (index, _label, instance) in self.iter() {
-            if instance.value(fid) <= threshold {
-                left_indices.push(index);
-            } else {
-                right_indices.push(index);
-            }
+    /// Split self. Returns (split feature, threshold, s value, left
+    /// child, right child). For each split, if its variance is zero,
+    /// it's non-splitable.
+    pub fn split(
+        &self,
+        min_leaf_count: usize,
+    ) -> Option<(Id, Value, f64, TrainingSample<'t, 'd>, TrainingSample<'t, 'd>)> {
+        assert!(min_leaf_count > 0);
+        if self.indices.len() < min_leaf_count ||
+            self.variance().abs() <= 0.000001
+        {
+            return None;
         }
 
-        let left = TrainingSample {
-            training: self.training,
-            indices: left_indices,
-        };
-        let right = TrainingSample {
-            training: self.training,
-            indices: right_indices,
-        };
-        Some((fid, threshold, s, left, right))
+        // Find the split with the best s value;
+        if let Some((fid, threshold, s)) = self.best_split(min_leaf_count) {
+            let mut left_indices = Vec::new();
+            let mut right_indices = Vec::new();
+            for (index, _label, instance) in self.iter() {
+                if instance.value(fid) <= threshold {
+                    left_indices.push(index);
+                } else {
+                    right_indices.push(index);
+                }
+            }
+
+            let left = TrainingSample {
+                training: self.training,
+                indices: left_indices,
+            };
+            let right = TrainingSample {
+                training: self.training,
+                indices: right_indices,
+            };
+            Some((fid, threshold, s, left, right))
+        } else {
+            None
+        }
     }
 }
 
