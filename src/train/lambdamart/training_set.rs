@@ -5,6 +5,7 @@ use util::{Id, Value};
 use std;
 use std::cmp::Ordering::*;
 use train::dataset::*;
+use std::collections::HashMap;
 
 /// A Mapping from the index of a Instance in the DataSet into a
 /// threshold interval.
@@ -177,7 +178,10 @@ pub struct TrainingSet<'d> {
     lambdas: Vec<Value>,
     // Newton step weights
     weights: Vec<Value>,
-    threshold_maps: Vec<ThresholdMap>,
+
+    // Do not make assumptions on feature id values, so use a hash
+    // map.
+    threshold_maps: HashMap<usize, ThresholdMap>,
 }
 
 impl<'d> TrainingSet<'d> {
@@ -190,14 +194,14 @@ impl<'d> TrainingSet<'d> {
         fn generate_thresholds(
             dataset: &DataSet,
             thresholds_count: usize,
-        ) -> Vec<ThresholdMap> {
-            let mut threshold_maps = Vec::new();
+        ) -> HashMap<usize, ThresholdMap> {
+            let mut threshold_maps = HashMap::new();
             for fid in dataset.fid_iter() {
                 let values: Vec<Value> =
                     dataset.feature_value_iter(fid).collect();
                 let map = ThresholdMap::new(values, thresholds_count);
 
-                threshold_maps.push(map);
+                threshold_maps.insert(fid, map);
             }
             threshold_maps
         }
@@ -296,7 +300,7 @@ impl<'d> TrainingSet<'d> {
         let iter = iter.map(|id| (id, self.lambdas[id]));
 
         // Get the map by feature id.
-        let threshold_map = &self.threshold_maps[fid - 1];
+        let threshold_map = &self.threshold_maps[&fid];
         threshold_map.histogram(iter)
     }
 
