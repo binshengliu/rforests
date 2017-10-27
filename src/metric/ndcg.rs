@@ -1,9 +1,11 @@
 use super::MetricScorer;
 use super::DCGScorer;
+use std::cell::RefCell;
 
 pub struct NDCGScorer {
     truncation_level: usize,
     dcg: DCGScorer,
+    discount_cache: RefCell<Vec<f64>>,
 }
 
 impl NDCGScorer {
@@ -11,13 +13,28 @@ impl NDCGScorer {
         NDCGScorer {
             truncation_level: truncation_level,
             dcg: DCGScorer::new(truncation_level),
+            discount_cache: RefCell::new(
+                (0..100)
+                    .map(|i| 1.0 / (i as f64 + 2.0).log2())
+                    .collect(),
+            ),
         }
     }
 
     // Maybe cache the values. But I haven't come up with a method to
     // share the cached values.
     fn discount(&self, i: usize) -> f64 {
-        1.0 / (i as f64 + 2.0).log2()
+        let len = self.discount_cache.borrow().len();
+        if i >= len {
+            let mut cache = self.discount_cache.borrow_mut();
+            let start = cache.len();
+            let end = i + 1;
+            for j in start..end {
+                cache.push(1.0 / (j as f64 + 2.0).log2())
+            }
+        }
+
+        self.discount_cache.borrow()[i]
     }
 
     fn gain(&self, score: f64) -> f64 {
