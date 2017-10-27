@@ -2,3 +2,4 @@
 /data/
 **/*.rs.bk
 *.svg
+*.data
