@@ -150,9 +150,10 @@ impl RegressionTree {
     }
 
     /// Fit to a training.
-    pub fn fit(&mut self, training: &TrainingSet) {
+    pub fn fit(&mut self, training: &TrainingSet) -> Vec<Value> {
         let sample = TrainingSample::from(training);
         let mut leaves = 0;
+        let mut leaf_output: Vec<Value> = vec![0.0; training.len()];
 
         let root = Rc::new(RefCell::new(Node::new()));
         self.root = Some(root.clone());
@@ -168,7 +169,7 @@ impl RegressionTree {
             if 1 + leaves + queue.len() >= self.max_leaves {
                 let value = sample.newton_output();
                 node.borrow_mut().output = Some(value);
-                sample.update_output(value * self.learning_rate);
+                sample.update_output(&mut leaf_output, value * self.learning_rate);
                 leaves += 1;
                 continue;
             }
@@ -177,7 +178,7 @@ impl RegressionTree {
             if split_result.is_none() {
                 let value = sample.newton_output();
                 node.borrow_mut().output = Some(value);
-                sample.update_output(value * self.learning_rate);
+                sample.update_output(&mut leaf_output, value * self.learning_rate);
                 leaves += 1;
                 continue;
             }
@@ -207,6 +208,8 @@ impl RegressionTree {
             queue.push(NodeData::new(left.clone(), left_sample));
             queue.push(NodeData::new(right.clone(), right_sample));
         }
+
+        leaf_output
     }
 
     /// Evaluate an input.
