@@ -5,7 +5,8 @@ use util::{Id, Value};
 use std;
 use std::cmp::Ordering::*;
 use train::dataset::*;
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap};
+use std::cmp::Ordering;
 
 /// A Mapping from the index of a Instance in the DataSet into a
 /// threshold interval.
@@ -403,6 +404,33 @@ impl<'d> TrainingSet<'d> {
     }
 }
 
+/// Representing a split position with its s value.
+struct SplitPos {
+    pub fid: usize,
+    pub threshold: f64,
+    pub s: f64,
+}
+
+impl PartialEq for SplitPos {
+    fn eq(&self, other: &SplitPos) -> bool {
+        self.s == other.s
+    }
+}
+
+impl PartialOrd for SplitPos {
+    fn partial_cmp(&self, other: &SplitPos) -> Option<Ordering> {
+        self.s.partial_cmp(&other.s)
+    }
+}
+
+impl Eq for SplitPos {}
+
+impl Ord for SplitPos {
+    fn cmp(&self, other: &SplitPos) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+    }
+}
+
 /// A collection type containing part of a data set.
 pub struct TrainingSample<'t, 'd: 't> {
     /// Original data
@@ -511,23 +539,21 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
     /// Find the best split of this sample. For each feature, find the
     /// best split point that gets the best squared error. And find
     /// the best among all the features.
-    fn best_split(&self, min_leaf_count: usize) -> Option<(usize, f64, f64)> {
+    fn best_split(&self, min_leaf_count: usize) -> Option<SplitPos> {
         // (fid, threshold, s)
-        let mut splits: Vec<(Id, Value, f64)> = Vec::new();
+        let mut splits: BinaryHeap<SplitPos> = BinaryHeap::new();
         for fid in self.fid_iter() {
-            debug!("Find best split for fid {}", fid);
             let feature_histogram = self.feature_histogram(fid);
             let split = feature_histogram.best_split(min_leaf_count);
             match split {
-                Some((threshold, s)) => splits.push((fid, threshold, s)),
+                Some((threshold, s)) => {
+                    splits.push(SplitPos { fid, threshold, s })
+                }
                 None => continue,
             }
         }
 
-        // Find the split with the best s value;
-        splits.into_iter().max_by(
-            |a, b| a.2.partial_cmp(&b.2).unwrap(),
-        )
+        splits.pop()
     }
 
     /// Split self. Returns (split feature, threshold, s value, left
@@ -545,7 +571,9 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
         }
 
         // Find the split with the best s value;
-        if let Some((fid, threshold, s)) = self.best_split(min_leaf_count) {
+        if let Some(SplitPos { fid, threshold, s }) =
+            self.best_split(min_leaf_count)
+        {
             let mut left_indices = Vec::new();
             let mut right_indices = Vec::new();
             for (index, _label, instance) in self.iter() {
