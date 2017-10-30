@@ -208,14 +208,9 @@ impl<'d> TrainingSet<'d> {
 
         let len = dataset.len();
 
-        let mut model_scores = Vec::with_capacity(len);
-        model_scores.resize(len, 0.0);
-
-        let mut lambdas = Vec::with_capacity(len);
-        lambdas.resize(len, 0.0);
-
-        let mut weights = Vec::with_capacity(len);
-        weights.resize(len, 0.0);
+        let model_scores = vec![0.0; len];
+        let lambdas = vec![0.0; len];
+        let weights = vec![0.0; len];
 
         TrainingSet {
             dataset: dataset,

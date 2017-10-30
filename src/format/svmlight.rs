@@ -275,8 +275,7 @@ impl SvmLightFile {
         let v: Vec<(Id, Value)> =
             fields.iter().map(|&s| parse(s)).collect::<Result<_>>()?;
         let max_id = v.iter().max_by_key(|e| e.0).unwrap().0;
-        let mut ret: Vec<f64> = Vec::with_capacity(max_id + 1);
-        ret.resize(max_id, 0.0);
+        let mut ret: Vec<f64> = vec![0.0; max_id];
         for &(id, value) in v.iter() {
             ret[(id - 1) as usize] = value;
         }
