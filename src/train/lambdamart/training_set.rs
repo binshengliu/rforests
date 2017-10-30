@@ -421,6 +421,14 @@ impl Ord for SplitPos {
     }
 }
 
+pub struct SampleSplit<'t, 'd: 't> {
+    pub fid: usize,
+    pub threshold: f64,
+    pub s: f64,
+    pub left: TrainingSample<'t, 'd>,
+    pub right: TrainingSample<'t, 'd>,
+}
+
 /// A collection type containing part of a data set.
 pub struct TrainingSample<'t, 'd: 't> {
     /// Original data
@@ -551,10 +559,7 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
     /// Split self. Returns (split feature, threshold, s value, left
     /// child, right child). For each split, if its variance is zero,
     /// it's non-splitable.
-    pub fn split(
-        &self,
-        min_leaf_count: usize,
-    ) -> Option<(Id, Value, f64, TrainingSample<'t, 'd>, TrainingSample<'t, 'd>)> {
+    pub fn split(&self, min_leaf_count: usize) -> Option<SampleSplit<'t, 'd>> {
         assert!(min_leaf_count > 0);
         if self.indices.len() < min_leaf_count ||
             self.variance().abs() <= 0.000001
@@ -584,7 +589,13 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
                 training: self.training,
                 indices: right_indices,
             };
-            Some((fid, threshold, s, left, right))
+            Some(SampleSplit {
+                fid,
+                threshold,
+                s,
+                left,
+                right,
+            })
         } else {
             None
         }
@@ -748,9 +759,9 @@ mod tests {
         training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
         let sample = TrainingSample::from(&training);
-        let (fid, threshold, _s, _left, _right) = sample.split(1).unwrap();
-        assert_eq!(fid, 1);
-        assert_eq!(threshold, 1.0);
+        let split = sample.split(1).unwrap();
+        assert_eq!(split.fid, 1);
+        assert_eq!(split.threshold, 1.0);
     }
 
     #[test]
@@ -780,11 +791,11 @@ mod tests {
         let sample = TrainingSample::from(&training);
         assert!(sample.split(9).is_none());
         assert!(sample.split(4).is_none());
-        let (fid, threshold, _s, left, _right) = sample.split(3).unwrap();
-        assert_eq!(fid, 1);
-        assert_eq!(threshold, 3.0 + 2.0 / 3.0);
+        let split = sample.split(3).unwrap();
+        assert_eq!(split.fid, 1);
+        assert_eq!(split.threshold, 3.0 + 2.0 / 3.0);
 
-        assert!(left.split(2).is_none());
+        assert!(split.left.split(2).is_none());
     }
 
     #[bench]
