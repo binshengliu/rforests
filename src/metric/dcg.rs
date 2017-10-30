@@ -38,11 +38,8 @@ impl MetricScorer for DCGScorer {
 
     fn delta(&self, labels: &[f64]) -> Vec<Vec<f64>> {
         let nlabels = labels.len();
-        let mut row: Vec<f64> = Vec::with_capacity(nlabels);
-        row.resize(nlabels, 0.0);
 
-        let mut delta = Vec::with_capacity(nlabels);
-        delta.resize(nlabels, row);
+        let mut delta = vec![vec![0.0; nlabels]; nlabels];
 
         for i in 0..nlabels {
             for j in i + 1..nlabels {
