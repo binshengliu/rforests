@@ -21,7 +21,7 @@ pub struct Config {
     pub max_leaves: usize,
     pub learning_rate: f64,
     pub thresholds: usize,
-    pub min_samples_per_leaf: usize,
+    pub min_leaf_samples: usize,
     pub early_stop: usize,
     pub print_metric: bool,
 }
@@ -50,7 +50,7 @@ impl LambdaMART {
     ///         trees: 1000,
     ///         learning_rate: 0.1,
     ///         max_leaves: 10,
-    ///         min_samples_per_leaf: 1,
+    ///         min_leaf_samples: 1,
     ///         thresholds: 256,
     ///         print_metric: true,
     ///         metric: metric::new("NDCG", 10).unwrap(),
@@ -88,7 +88,7 @@ impl LambdaMART {
             let mut tree = RegressionTree::new(
                 self.config.learning_rate,
                 self.config.max_leaves,
-                self.config.min_samples_per_leaf,
+                self.config.min_leaf_samples,
             );
 
             // The scores of the model are updated when the tree node
@@ -169,7 +169,7 @@ mod test {
             early_stop: 100,
             learning_rate: 0.1,
             max_leaves: 10,
-            min_samples_per_leaf: 1,
+            min_leaf_samples: 1,
             thresholds: 256,
             print_metric: false,
             metric: Box::new(NDCGScorer::new(10)),

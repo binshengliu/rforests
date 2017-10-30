@@ -91,7 +91,7 @@ fn option_to_string<T: ToString>(option: &Option<T>) -> String {
 pub struct RegressionTree {
     learning_rate: f64,
     // Minimal count of samples per leaf.
-    min_samples_per_leaf: usize,
+    min_leaf_samples: usize,
     max_leaves: usize,
     root: Option<Rc<RefCell<Node>>>,
 }
@@ -134,16 +134,16 @@ impl<'t, 'd: 't> Ord for NodeData<'t, 'd> {
 }
 
 impl RegressionTree {
-    /// Create a new regression tree, with at least min_samples_per_leaf
+    /// Create a new regression tree, with at least min_leaf_samples
     /// training instances on the leaves.
     pub fn new(
         learning_rate: f64,
         max_leaves: usize,
-        min_samples_per_leaf: usize,
+        min_leaf_samples: usize,
     ) -> RegressionTree {
         RegressionTree {
             learning_rate: learning_rate,
-            min_samples_per_leaf: min_samples_per_leaf,
+            min_leaf_samples: min_leaf_samples,
             max_leaves: max_leaves,
             root: None,
         }
@@ -174,7 +174,7 @@ impl RegressionTree {
                 continue;
             }
 
-            let split_result = sample.split(self.min_samples_per_leaf);
+            let split_result = sample.split(self.min_leaf_samples);
             if split_result.is_none() {
                 let value = sample.newton_output();
                 node.borrow_mut().output = Some(value);
@@ -282,7 +282,7 @@ mod test {
         let mut training = TrainingSet::new(&dataset, 3);
         // training.init_model_scores(&[3.0, 2.0]);
         let learning_rate = 0.1;
-        let min_samples_per_leaf = 1;
+        let min_leaf_samples = 1;
         let max_leaves = 10;
 
         for _ in 0..10 {
@@ -294,7 +294,7 @@ mod test {
             let mut tree = RegressionTree::new(
                 learning_rate,
                 max_leaves,
-                min_samples_per_leaf,
+                min_leaf_samples,
             );
             tree.fit(&training);
 

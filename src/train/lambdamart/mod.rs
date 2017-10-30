@@ -21,7 +21,7 @@ struct LambdaMARTParameter<'a> {
     leaves: usize,
     shrinkage: f64,
     thresholds_count: usize,
-    min_leaf_support: usize,
+    min_leaf_samples: usize,
     early_stop: usize,
 }
 
@@ -43,7 +43,7 @@ impl<'a> LambdaMARTParameter<'a> {
             .unwrap_or_else(|e| e.exit());
         let thresholds_count = value_t!(matches.value_of("thresholds"), usize)
             .unwrap_or_else(|e| e.exit());
-        let min_leaf_support =
+        let min_leaf_samples =
             value_t!(matches.value_of("min-leaf-support"), usize)
                 .unwrap_or_else(|e| e.exit());
         let early_stop = value_t!(matches.value_of("early-stop"), usize)
@@ -59,7 +59,7 @@ impl<'a> LambdaMARTParameter<'a> {
             leaves: leaves,
             shrinkage: shrinkage,
             thresholds_count: thresholds_count,
-            min_leaf_support: min_leaf_support,
+            min_leaf_samples: min_leaf_samples,
             early_stop: early_stop,
         }
     }
@@ -90,7 +90,7 @@ impl<'a> LambdaMARTParameter<'a> {
             trees: self.trees,
             learning_rate: self.shrinkage,
             max_leaves: self.leaves,
-            min_samples_per_leaf: self.min_leaf_support,
+            min_leaf_samples: self.min_leaf_samples,
             thresholds: self.thresholds_count,
             print_metric: true,
             metric: metric,
@@ -127,7 +127,7 @@ impl<'a> LambdaMARTParameter<'a> {
         print_param("Leaves", self.leaves);
         print_param("Shrinkage", self.shrinkage);
         print_param("Thresholds count", self.thresholds_count);
-        print_param("Min leaf support", self.min_leaf_support);
+        print_param("Min leaf samples", self.min_leaf_samples);
         print_param("Early stop", self.early_stop);
     }
 }
