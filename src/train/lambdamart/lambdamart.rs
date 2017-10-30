@@ -93,7 +93,9 @@ impl LambdaMART {
 
             // The scores of the model are updated when the tree node
             // does not split and becomes a leaf.
-            tree.fit(&training);
+            let leaf_output = tree.fit(&training);
+
+            training.update_result(&leaf_output);
 
             self.ensemble.push(tree);
 

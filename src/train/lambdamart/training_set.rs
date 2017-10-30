@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use metric::MetricScorer;
 use super::histogram::*;
 use util::{Id, Value};
@@ -174,7 +173,7 @@ pub struct TrainingSet<'d> {
     dataset: &'d DataSet,
     // Fitting result of the model. We need to update the result at
     // each leaf node.
-    model_scores: Vec<Cell<Value>>,
+    model_scores: Vec<Value>,
     // Gradients, or lambdas.
     lambdas: Vec<Value>,
     // Newton step weights
@@ -210,7 +209,7 @@ impl<'d> TrainingSet<'d> {
         let len = dataset.len();
 
         let mut model_scores = Vec::with_capacity(len);
-        model_scores.resize(len, Cell::new(0.0));
+        model_scores.resize(len, 0.0);
 
         let mut lambdas = Vec::with_capacity(len);
         lambdas.resize(len, 0.0);
@@ -229,13 +228,13 @@ impl<'d> TrainingSet<'d> {
 
     /// Returns the number of instances in the training set, also
     /// referred to as its 'length'.
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.model_scores.len()
     }
 
     /// Get (label, instance) at given index.
     fn get(&self, index: usize) -> (Value, &'d Instance) {
-        (self.model_scores[index].get(), &self.dataset[index])
+        (self.model_scores[index], &self.dataset[index])
     }
 
     /// Get lambda at given index.
@@ -256,33 +255,29 @@ impl<'d> TrainingSet<'d> {
     pub fn init_model_scores(&mut self, values: &[Value]) {
         assert_eq!(self.len(), values.len());
         for (score, &value) in self.model_scores.iter_mut().zip(values.iter()) {
-            score.set(value);
+            *score = value;
         }
     }
 
     /// Returns an iterator over the labels in the data set.
     pub fn iter(&'d self) -> impl Iterator<Item = (Value, &Instance)> + 'd {
-        self.model_scores.iter().map(|celled| celled.get()).zip(
-            self.dataset.iter(),
-        )
+        self.model_scores.iter().cloned().zip(self.dataset.iter())
     }
 
     /// Returns an iterator over the labels in the data set.
     pub fn model_score_iter(&'d self) -> impl Iterator<Item = Value> + 'd {
-        self.model_scores.iter().map(|celled| celled.get())
+        self.model_scores.iter().cloned()
     }
 
     /// Returns the label value at given index.
     pub fn model_score(&self, index: usize) -> f64 {
-        self.model_scores[index].get()
+        self.model_scores[index]
     }
 
     /// Adds delta to each label specified in `indices`.
-    pub fn update_result(&self, indices: &[Id], delta: Value) {
-        assert!(indices.len() <= self.model_scores.len());
-        for &index in indices.iter() {
-            let celled_score = &self.model_scores[index];
-            celled_score.set(celled_score.get() + delta);
+    pub fn update_result(&mut self, delta: &[Value]) {
+        for (score, delta) in self.model_scores.iter_mut().zip(delta.iter()) {
+            *score += delta;
         }
     }
 
@@ -333,7 +328,7 @@ impl<'d> TrainingSet<'d> {
                     (
                         index,
                         self.dataset[index].label(),
-                        self.model_scores[index].get(),
+                        self.model_scores[index],
                     )
                 })
                 .collect();
@@ -501,8 +496,10 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
         }
     }
 
-    pub fn update_output(&self, delta: Value) {
-        self.training.update_result(&self.indices, delta);
+    pub fn update_output(&self, leaf_output: &mut Vec<Value>, delta: Value) {
+        for &i in self.indices.iter() {
+            leaf_output[i] = delta;
+        }
     }
 
     /// Returns a histogram of the feature of the data set sample.
