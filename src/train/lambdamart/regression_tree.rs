@@ -1,8 +1,6 @@
 use std;
 use train::dataset::*;
 use util::*;
-use std::rc::Rc;
-use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use train::lambdamart::training_set::*;
@@ -12,56 +10,39 @@ struct Node {
     fid: Option<Id>,
     threshold: Option<Value>,
     output: Option<f64>,
-    left: Option<Rc<RefCell<Node>>>,
-    right: Option<Rc<RefCell<Node>>>,
+    parent: Option<usize>,
+    left: Option<usize>,
+    right: Option<usize>,
 }
 
 impl Node {
     /// Create a new node.
-    pub fn new() -> Node {
+    pub fn new(parent: Option<usize>) -> Node {
         Node {
             fid: None,
             threshold: None,
+            parent: parent,
             left: None,
             right: None,
             output: None,
         }
     }
 
-    /// Evaluate an input
-    pub fn evaluate(&self, instance: &Instance) -> f64 {
-        if let Some(value) = self.output {
-            return value;
-        }
-
-        if instance.value(self.fid.unwrap()) <= self.threshold.unwrap() {
-            self.left.as_ref().unwrap().borrow().evaluate(instance)
-        } else {
-            self.right.as_ref().unwrap().borrow().evaluate(instance)
-        }
+    pub fn set_non_leaf(
+        &mut self,
+        fid: Id,
+        threshold: Value,
+        left: usize,
+        right: usize,
+    ) {
+        self.fid = Some(fid);
+        self.threshold = Some(threshold);
+        self.left = Some(left);
+        self.right = Some(right);
     }
 
-    pub fn print(&self, indent: usize) {
-        print!("{:width$}", "", width = indent);
-        if let Some(output) = self.output {
-            println!(
-                "{{ output: {:?} }}",
-                output,
-            );
-        } else {
-            println!(
-                "{{ fid: {:?}, threshold: {:?} }}",
-                option_to_string(&self.fid),
-                option_to_string(&self.threshold)
-            );
-        }
-
-        if let Some(ref left) = self.left {
-            left.borrow().print(indent + 2);
-        }
-        if let Some(ref right) = self.right {
-            right.borrow().print(indent + 2);
-        }
+    pub fn set_leaf(&mut self, output: f64) {
+        self.output = Some(output);
     }
 }
 
@@ -93,21 +74,21 @@ pub struct RegressionTree {
     // Minimal count of samples per leaf.
     min_leaf_samples: usize,
     max_leaves: usize,
-    root: Option<Rc<RefCell<Node>>>,
+    nodes: Vec<Node>,
 }
 
 struct NodeData<'t, 'd: 't> {
-    node: Rc<RefCell<Node>>,
+    index: usize,
     sample: TrainingSample<'t, 'd>,
 }
 
 impl<'t, 'd: 't> NodeData<'t, 'd> {
     pub fn new(
-        node: Rc<RefCell<Node>>,
+        index: usize,
         sample: TrainingSample<'t, 'd>,
     ) -> NodeData<'t, 'd> {
         NodeData {
-            node: node,
+            index: index,
             sample: sample,
         }
     }
@@ -145,8 +126,33 @@ impl RegressionTree {
             learning_rate: learning_rate,
             min_leaf_samples: min_leaf_samples,
             max_leaves: max_leaves,
-            root: None,
+            nodes: Vec::new(),
         }
+    }
+
+    fn split_node(
+        &mut self,
+        index: usize,
+        fid: usize,
+        threshold: f64,
+    ) -> (usize, usize) {
+        let left_index = self.nodes.len();
+        let mut left = Node::new(Some(index));
+        left.parent = Some(index);
+        self.nodes.push(left);
+        let right_index = self.nodes.len();
+        let mut right = Node::new(Some(index));
+        right.parent = Some(index);
+        self.nodes.push(right);
+
+        let node = &mut self.nodes[index];
+        node.set_non_leaf(fid, threshold, left_index, right_index);
+
+        (left_index, right_index)
+    }
+
+    fn set_leaf_node(&mut self, index: usize, output: f64) {
+        self.nodes[index].set_leaf(output);
     }
 
     /// Fit to a training.
@@ -155,21 +161,21 @@ impl RegressionTree {
         let mut leaves = 0;
         let mut leaf_output: Vec<Value> = vec![0.0; training.len()];
 
-        let root = Rc::new(RefCell::new(Node::new()));
-        self.root = Some(root.clone());
+        let root = Node::new(None);
+        self.nodes.push(root);
 
         let mut queue: BinaryHeap<NodeData> =
             BinaryHeap::with_capacity(self.max_leaves);
-        queue.push(NodeData::new(root.clone(), sample));
+        queue.push(NodeData::new(0, sample));
 
         while !queue.is_empty() {
-            let NodeData { node, sample } = queue.pop().unwrap();
-
+            let NodeData { index, sample } = queue.pop().unwrap();
             // We have reached leaves count limitation.
             if 1 + leaves + queue.len() >= self.max_leaves {
                 let value = sample.newton_output();
-                node.borrow_mut().output = Some(value);
-                sample.update_output(&mut leaf_output, value * self.learning_rate);
+                let output = value * self.learning_rate;
+                self.set_leaf_node(index, value);
+                sample.update_output(&mut leaf_output, output);
                 leaves += 1;
                 continue;
             }
@@ -177,36 +183,31 @@ impl RegressionTree {
             let split_result = sample.split(self.min_leaf_samples);
             if split_result.is_none() {
                 let value = sample.newton_output();
-                node.borrow_mut().output = Some(value);
-                sample.update_output(&mut leaf_output, value * self.learning_rate);
+                let output = value * self.learning_rate;
+                self.set_leaf_node(index, value);
+                sample.update_output(&mut leaf_output, output);
                 leaves += 1;
                 continue;
             }
 
-            let (fid, threshold, _s_value, left_sample, right_sample) =
-                split_result.unwrap();
+            let split = split_result.unwrap();
+            let left_len = split.left.len();
+            let right_len = split.right.len();
 
-            let left = Rc::new(RefCell::new(Node::new()));
-            let right = Rc::new(RefCell::new(Node::new()));
+            // Split node at `index`.
+            let (left, right) =
+                self.split_node(index, split.fid, split.threshold);
 
-            let mut node = node.borrow_mut();
-            node.fid = Some(fid);
-            node.threshold = Some(threshold);
-            node.left = Some(left.clone());
-            node.right = Some(right.clone());
+            queue.push(NodeData::new(left, split.left));
+            queue.push(NodeData::new(right, split.right));
 
             debug!(
-                "Split {} at fid {}, threshold {}, s {} : {} + {}",
-                sample.len(),
-                fid,
-                threshold,
-                _s_value,
-                left_sample.len(),
-                right_sample.len()
+                "Split: fid:{} threshold:{} s:{}",
+                split.fid,
+                split.threshold,
+                split.s
             );
-
-            queue.push(NodeData::new(left.clone(), left_sample));
-            queue.push(NodeData::new(right.clone(), right_sample));
+            debug!("Split: {} => {} + {}", sample.len(), left_len, right_len);
         }
 
         leaf_output
@@ -214,15 +215,42 @@ impl RegressionTree {
 
     /// Evaluate an input.
     pub fn evaluate(&self, instance: &Instance) -> f64 {
-        self.root.as_ref().unwrap().borrow().evaluate(instance) *
-            self.learning_rate
+        let mut node = &self.nodes[0];
+        while node.output.is_none() {
+            if instance.value(node.fid.unwrap()) <= node.threshold.unwrap() {
+                node = &self.nodes[node.left.unwrap()];
+            } else {
+                node = &self.nodes[node.right.unwrap()];
+            }
+        }
+
+        assert!(node.output.is_some());
+        node.output.unwrap() * self.learning_rate
     }
 
     pub fn print(&self) {
-        if let Some(ref root) = self.root {
-            root.borrow().print(0);
-        } else {
-            println!("Empty");
+        if self.nodes.is_empty() {
+            println!("Empty tree");
+            return;
+        }
+
+        // (index, indent)
+        let mut queue: Vec<(usize, usize)> = vec![(0, 0)];
+        while !queue.is_empty() {
+            let (index, indent) = queue.pop().unwrap();
+            let node = &self.nodes[index];
+            print!("{:width$}", "", width = indent);
+            if let Some(output) = node.output {
+                println!("{{ output: {:?} }}", output);
+            } else {
+                println!(
+                    "{{ fid: {:?}, threshold: {:?} }}",
+                    option_to_string(&node.fid),
+                    option_to_string(&node.threshold)
+                );
+                queue.push((node.left.unwrap(), indent + 2));
+                queue.push((node.right.unwrap(), indent + 2));
+            }
         }
     }
 }
