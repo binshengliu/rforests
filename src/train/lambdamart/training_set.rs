@@ -1,4 +1,4 @@
-use metric::MetricScorer;
+use metric::Measure;
 use super::histogram::*;
 use util::{Id, Value};
 use std;
@@ -171,7 +171,7 @@ impl std::fmt::Debug for ThresholdMap {
 // Output: Vec of (higher index, lower index, lambda, weight)
 fn compute_lambda_weight(
     rank_list: &mut Vec<(usize, f64, f64)>,
-    metric: &Box<MetricScorer>,
+    metric: &Box<Measure>,
 ) -> Vec<(usize, usize, f64, f64)> {
     let mut query_values: Vec<(usize, usize, f64, f64)> = Vec::new();
     // Rank by the scores of our model.
@@ -182,7 +182,7 @@ fn compute_lambda_weight(
     let ranked_labels: Vec<_> =
         rank_list.iter().map(|&(_, label, _)| label).collect();
 
-    let metric_delta = metric.delta(&ranked_labels);
+    let changes = metric.swap_changes(&ranked_labels);
 
     let k = metric.get_k();
     for (metric_index1, &(index1, label1, score1)) in
@@ -199,11 +199,10 @@ fn compute_lambda_weight(
                 continue;
             }
 
-            let metric_delta_value = metric_delta[metric_index1][metric_index2]
-                .abs();
+            let change = changes[metric_index1][metric_index2].abs();
             let rho = 1.0 / (1.0 + (score1 - score2).exp());
-            let lambda = metric_delta_value * rho;
-            let weight = rho * (1.0 - rho) * metric_delta_value;
+            let lambda = change * rho;
+            let weight = rho * (1.0 - rho) * change;
 
             query_values.push((index1, index2, lambda, weight));
         }
@@ -349,10 +348,7 @@ impl<'d> TrainingSet<'d> {
     /// another
     ///
     /// 3. Update lambda and weight according to the formulas
-    pub fn update_lambdas_weights<'a, 'b>(
-        &'a mut self,
-        metric: &Box<MetricScorer>,
-    ) {
+    pub fn update_lambdas_weights<'a, 'b>(&'a mut self, metric: &Box<Measure>) {
         for (l, w) in self.lambdas.iter_mut().zip(self.weights.iter_mut()) {
             *l = 0.0;
             *w = 0.0;
@@ -393,7 +389,7 @@ impl<'d> TrainingSet<'d> {
         }
     }
 
-    pub fn measure(&self, metric: &Box<MetricScorer>) -> f64 {
+    pub fn measure(&self, metric: &Box<Measure>) -> f64 {
         let mut score = 0.0;
         let mut count = 0;
         for (_qid, mut indices) in self.dataset.query_iter() {
@@ -412,7 +408,7 @@ impl<'d> TrainingSet<'d> {
                 .collect();
 
             count += 1;
-            score += metric.score(&labels);
+            score += metric.measure(&labels);
         }
 
         score / count as f64

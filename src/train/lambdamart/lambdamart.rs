@@ -17,7 +17,7 @@ pub struct Config {
     pub validate: Option<DataSet>,
     pub test: Option<DataSet>,
 
-    pub metric: Box<MetricScorer>,
+    pub metric: Box<Measure>,
     pub trees: usize,
     pub max_leaves: usize,
     pub learning_rate: f64,

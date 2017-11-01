@@ -323,7 +323,7 @@ impl DataSet {
     pub fn evaluate<E: Evaluate>(
         &self,
         e: &E,
-        metric: &Box<MetricScorer>,
+        metric: &Box<Measure>,
     ) -> f64 {
         let mut score = 0.0;
         let mut count: usize = 0;
@@ -340,7 +340,7 @@ impl DataSet {
                 .iter()
                 .map(|&(id, _)| self.instances[id].label())
                 .collect();
-            let query_score = metric.score(&labels);
+            let query_score = metric.measure(&labels);
             debug!("Model score for qid {}: {}", qid, score);
 
             count += 1;

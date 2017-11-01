@@ -1,4 +1,4 @@
-use super::MetricScorer;
+use super::Measure;
 
 pub struct DCGScorer {
     truncation_level: usize,
@@ -20,7 +20,7 @@ impl DCGScorer {
     }
 }
 
-impl MetricScorer for DCGScorer {
+impl Measure for DCGScorer {
     fn name(&self) -> String {
         format!("DCG@{}", self.truncation_level)
     }
@@ -29,14 +29,14 @@ impl MetricScorer for DCGScorer {
         self.truncation_level
     }
 
-    fn score(&self, labels: &[f64]) -> f64 {
+    fn measure(&self, labels: &[f64]) -> f64 {
         let n = usize::min(labels.len(), self.truncation_level);
         (0..n)
             .map(|i| self.gain(labels[i]) * self.discount(i))
             .sum()
     }
 
-    fn delta(&self, labels: &[f64]) -> Vec<Vec<f64>> {
+    fn swap_changes(&self, labels: &[f64]) -> Vec<Vec<f64>> {
         let nlabels = labels.len();
 
         let mut delta = vec![vec![0.0; nlabels]; nlabels];
@@ -61,7 +61,7 @@ mod test {
     fn test_dcg_score() {
         let dcg = DCGScorer::new(10);
         assert_eq!(
-            dcg.score(&vec![3.0, 2.0, 4.0]),
+            dcg.measure(&vec![3.0, 2.0, 4.0]),
             7.0 / 2.0_f64.log2() + 3.0 / 3.0_f64.log2() + 15.0 / 4.0_f64.log2()
         );
     }
@@ -70,7 +70,7 @@ mod test {
     fn test_dcg_score_k_is_2() {
         let dcg = DCGScorer::new(2);
         assert_eq!(
-            dcg.score(&vec![3.0, 2.0, 4.0]),
+            dcg.measure(&vec![3.0, 2.0, 4.0]),
             7.0 / 2.0_f64.log2() + 3.0 / 3.0_f64.log2()
         );
     }
@@ -95,7 +95,7 @@ mod test {
         let score_swap_1_2 = 7.0 / 2.0_f64.log2() + 15.0 / 3.0_f64.log2() +
             3.0 / 4.0_f64.log2();
 
-        let result = dcg.delta(&vec![3.0, 2.0, 4.0]);
+        let result = dcg.swap_changes(&vec![3.0, 2.0, 4.0]);
         let expected =
             vec![
                 vec![0.0, origin - score_swap_0_1, origin - score_swap_0_2],

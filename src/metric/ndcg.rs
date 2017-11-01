@@ -1,4 +1,4 @@
-use super::MetricScorer;
+use super::Measure;
 use super::DCGScorer;
 
 lazy_static! {
@@ -38,11 +38,11 @@ impl NDCGScorer {
 
         let mut clone: Vec<f64> = labels.iter().cloned().collect();
         clone.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
-        self.dcg.score(&clone)
+        self.dcg.measure(&clone)
     }
 }
 
-impl MetricScorer for NDCGScorer {
+impl Measure for NDCGScorer {
     fn name(&self) -> String {
         format!("NDCG@{}", self.truncation_level)
     }
@@ -51,16 +51,16 @@ impl MetricScorer for NDCGScorer {
         self.truncation_level
     }
 
-    fn score(&self, labels: &[f64]) -> f64 {
+    fn measure(&self, labels: &[f64]) -> f64 {
         let max = self.max_dcg(labels);
         if max.abs() == 0.0 {
             0.0
         } else {
-            self.dcg.score(labels) / self.max_dcg(labels)
+            self.dcg.measure(labels) / self.max_dcg(labels)
         }
     }
 
-    fn delta(&self, labels: &[f64]) -> Vec<Vec<f64>> {
+    fn swap_changes(&self, labels: &[f64]) -> Vec<Vec<f64>> {
         let nlabels = labels.len();
 
         let mut delta = vec![vec![0.0; nlabels]; nlabels];
@@ -92,13 +92,13 @@ mod test {
             15.0 / 4.0_f64.log2();
         let max_dcg = 15.0 / 2.0_f64.log2() + 7.0 / 3.0_f64.log2() +
             3.0 / 4.0_f64.log2();
-        assert_eq!(ndcg.score(&vec![3.0, 2.0, 4.0]), dcg / max_dcg);
+        assert_eq!(ndcg.measure(&vec![3.0, 2.0, 4.0]), dcg / max_dcg);
     }
 
     #[test]
     fn test_ndcg_score_zeros() {
         let ndcg = NDCGScorer::new(10);
-        assert_eq!(ndcg.score(&vec![0.0, 0.0, 0.0]), 0.0);
+        assert_eq!(ndcg.measure(&vec![0.0, 0.0, 0.0]), 0.0);
     }
 
     #[test]
@@ -106,7 +106,7 @@ mod test {
         let ndcg = NDCGScorer::new(2);
         let dcg = 7.0 / 2.0_f64.log2() + 3.0 / 3.0_f64.log2();
         let max_dcg = 15.0 / 2.0_f64.log2() + 7.0 / 3.0_f64.log2();
-        assert_eq!(ndcg.score(&vec![3.0, 2.0, 4.0]), dcg / max_dcg);
+        assert_eq!(ndcg.measure(&vec![3.0, 2.0, 4.0]), dcg / max_dcg);
     }
 
     #[test]
@@ -132,7 +132,7 @@ mod test {
         let score_swap_1_2 = 7.0 / 2.0_f64.log2() + 15.0 / 3.0_f64.log2() +
             3.0 / 4.0_f64.log2();
 
-        let result = ndcg.delta(&vec![3.0, 2.0, 4.0]);
+        let result = ndcg.swap_changes(&vec![3.0, 2.0, 4.0]);
         let expected = vec![
             vec![
                 0.0,
