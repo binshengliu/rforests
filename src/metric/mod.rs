@@ -3,7 +3,7 @@ pub mod ndcg;
 pub use self::dcg::DCGScorer;
 pub use self::ndcg::NDCGScorer;
 
-pub trait MetricScorer {
+pub trait MetricScorer: Sync {
     fn get_k(&self) -> usize;
 
     fn score(&self, labels: &[f64]) -> f64;
