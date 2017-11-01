@@ -314,57 +314,74 @@ impl<'d> TrainingSet<'d> {
             *w = 0.0;
         }
 
-        for (qid, mut query) in self.dataset.query_iter() {
-            debug!("Update lambdas for qid {}", qid);
-            use std::cmp::Ordering;
+        // (index, lambda, weight)
+        let results: Arc<Mutex<Vec<Vec<_>>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut pool = ::util::POOL.lock().unwrap();
+        pool.scoped(
+            |scoped| for (qid, mut query) in self.dataset.query_iter() {
+                let results = results.clone();
+                let mut part: Vec<(usize, f64, f64)> = Vec::new();
+                let mut rank_list: Vec<_> = query
+                    .iter()
+                    .map(|&index| {
+                        (
+                            index,
+                            self.dataset[index].label(),
+                            self.model_scores[index],
+                        )
+                    })
+                    .collect();
 
-            let mut rank_list: Vec<_> = query
-                .iter()
-                .map(|&index| {
-                    (
-                        index,
-                        self.dataset[index].label(),
-                        self.model_scores[index],
-                    )
+                scoped.execute(move || {
+                    debug!("Update lambdas for qid {}", qid);
+
+                    // Rank by the scores of our model.
+                    rank_list.sort_by(|&(_, _, score1), &(_, _, score2)| {
+                        score2.partial_cmp(&score1).unwrap_or(Ordering::Equal)
+                    });
+
+                    let ranked_labels: Vec<_> =
+                        rank_list.iter().map(|&(_, label, _)| label).collect();
+
+                    let metric_delta = metric.delta(&ranked_labels);
+
+                    let k = metric.get_k();
+                    for (metric_index1, &(index1, label1, score1)) in
+                        rank_list.iter().enumerate()
+                    {
+                        for (metric_index2, &(index2, label2, score2)) in
+                            rank_list.iter().enumerate()
+                        {
+                            if metric_index1 > k && metric_index2 > k {
+                                break;
+                            }
+
+                            if label1 <= label2 {
+                                continue;
+                            }
+
+                            let metric_delta_value =
+                                metric_delta[metric_index1][metric_index2]
+                                    .abs();
+                            let rho = 1.0 / (1.0 + (score1 - score2).exp());
+                            let lambda = metric_delta_value * rho;
+                            let weight = rho * (1.0 - rho) * metric_delta_value;
+
+                            part.push((index1, lambda, weight));
+                            part.push((index2, -lambda, weight));
+                        }
+                    }
+                    let mut results = results.lock().unwrap();
+                    results.push(part);
                 })
-                .collect();
+            },
+        );
 
-            // Rank by the scores of our model.
-            rank_list.sort_by(|&(_, _, score1), &(_, _, score2)| {
-                score2.partial_cmp(&score1).unwrap_or(Ordering::Equal)
-            });
-
-            let ranked_labels: Vec<_> =
-                rank_list.iter().map(|&(_, label, _)| label).collect();
-
-            let metric_delta = metric.delta(&ranked_labels);
-
-            let k = metric.get_k();
-            for (metric_index1, &(index1, label1, score1)) in
-                rank_list.iter().enumerate()
-            {
-                for (metric_index2, &(index2, label2, score2)) in
-                    rank_list.iter().enumerate()
-                {
-                    if metric_index1 > k && metric_index2 > k {
-                        break;
-                    }
-
-                    if label1 <= label2 {
-                        continue;
-                    }
-
-                    let metric_delta_value =
-                        metric_delta[metric_index1][metric_index2].abs();
-                    let rho = 1.0 / (1.0 + (score1 - score2).exp());
-                    let lambda = metric_delta_value * rho;
-                    let weight = rho * (1.0 - rho) * metric_delta_value;
-
-                    self.lambdas[index1] += lambda;
-                    self.weights[index1] += weight;
-                    self.lambdas[index2] -= lambda;
-                    self.weights[index2] += weight;
-                }
+        let results = results.lock().unwrap();
+        for part in results.iter() {
+            for &(index, lambda, weight) in part.iter() {
+                self.lambdas[index] += lambda;
+                self.weights[index] += weight;
             }
         }
     }
