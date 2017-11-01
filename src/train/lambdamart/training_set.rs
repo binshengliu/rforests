@@ -213,7 +213,7 @@ fn compute_lambda_weight(
 /// A collection type containing a data set. The difference with
 /// DataSet is that this data structure keeps the latest label values
 /// after each training.
-pub struct TrainingSet<'d> {
+pub struct TrainSet<'d> {
     dataset: &'d DataSet,
     // Fitting result of the model. We need to update the result at
     // each leaf node.
@@ -228,13 +228,13 @@ pub struct TrainingSet<'d> {
     threshold_maps: HashMap<usize, ThresholdMap>,
 }
 
-impl<'d> TrainingSet<'d> {
-    /// Creates a new TrainingSet from DataSet. Thresholds will be
+impl<'d> TrainSet<'d> {
+    /// Creates a new TrainSet from DataSet. Thresholds will be
     /// generated.
     pub fn new(
         dataset: &'d DataSet,
         thresholds_count: usize,
-    ) -> TrainingSet<'d> {
+    ) -> TrainSet<'d> {
         fn generate_thresholds(
             dataset: &DataSet,
             thresholds_count: usize,
@@ -256,7 +256,7 @@ impl<'d> TrainingSet<'d> {
         let lambdas = vec![0.0; len];
         let weights = vec![0.0; len];
 
-        TrainingSet {
+        TrainSet {
             dataset: dataset,
             model_scores: model_scores,
             lambdas: lambdas,
@@ -453,7 +453,7 @@ pub struct SampleSplit<'t, 'd: 't> {
 /// A collection type containing part of a data set.
 pub struct TrainingSample<'t, 'd: 't> {
     /// Original data
-    training: &'t TrainingSet<'d>,
+    training: &'t TrainSet<'d>,
 
     /// Indices into training
     indices: Vec<usize>,
@@ -626,8 +626,8 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
     }
 }
 
-impl<'t, 'd> From<&'t TrainingSet<'d>> for TrainingSample<'t, 'd> {
-    fn from(training: &'t TrainingSet<'d>) -> TrainingSample<'t, 'd> {
+impl<'t, 'd> From<&'t TrainSet<'d>> for TrainingSample<'t, 'd> {
+    fn from(training: &'t TrainSet<'d>) -> TrainingSample<'t, 'd> {
         let len = training.len();
         let indices: Vec<usize> = (0..len).collect();
         TrainingSample {
@@ -727,7 +727,7 @@ mod tests {
 
         let dataset: DataSet = data.into_iter().collect();
 
-        let mut training = TrainingSet::new(&dataset, 3);
+        let mut training = TrainSet::new(&dataset, 3);
         training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
         // The values are verified by hand. This test is kept as a
@@ -779,7 +779,7 @@ mod tests {
 
         let dataset: DataSet = data.into_iter().collect();
 
-        let mut training = TrainingSet::new(&dataset, 3);
+        let mut training = TrainSet::new(&dataset, 3);
         training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
         let sample = TrainingSample::from(&training);
@@ -809,7 +809,7 @@ mod tests {
         // 1 | 2 3 4 5 6 7 8 9
         // 1 2 3 | 4 5 6 7 8 9
         // 1 2 3 4 5 6 | 7 8 9
-        let mut training = TrainingSet::new(&dataset, 3);
+        let mut training = TrainSet::new(&dataset, 3);
         training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
         let sample = TrainingSample::from(&training);
@@ -828,7 +828,7 @@ mod tests {
         let f = std::fs::File::open(path).unwrap();
         let dataset = DataSet::load(f).unwrap();
 
-        let mut training = TrainingSet::new(&dataset, 256);
+        let mut training = TrainSet::new(&dataset, 256);
         training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
         let sample = TrainingSample::from(&training);

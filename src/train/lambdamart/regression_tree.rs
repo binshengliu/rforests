@@ -156,7 +156,7 @@ impl RegressionTree {
     }
 
     /// Fit to a training.
-    pub fn fit(&mut self, training: &TrainingSet) -> Vec<Value> {
+    pub fn fit(&mut self, training: &TrainSet) -> Vec<Value> {
         let sample = TrainingSample::from(training);
         let mut leaves = 0;
         let mut leaf_output: Vec<Value> = vec![0.0; training.len()];
@@ -311,7 +311,7 @@ mod test {
 
         let dataset: DataSet = data.into_iter().collect();
 
-        let mut training = TrainingSet::new(&dataset, 3);
+        let mut training = TrainSet::new(&dataset, 3);
         // training.init_model_scores(&[3.0, 2.0]);
         let learning_rate = 0.1;
         let min_leaf_samples = 1;

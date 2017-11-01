@@ -81,7 +81,7 @@ impl LambdaMART {
     /// specified when creating LambdaMART instance.
     pub fn learn(&mut self) -> Result<()> {
         let mut training =
-            TrainingSet::new(&self.config.train, self.config.thresholds);
+            TrainSet::new(&self.config.train, self.config.thresholds);
         let mut validate =
             self.config.validate.as_ref().map(|v| ValidateSet::from(v));
 
