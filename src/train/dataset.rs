@@ -320,7 +320,7 @@ impl DataSet {
         })
     }
 
-    pub fn validate<E: Evaluate>(
+    pub fn evaluate<E: Evaluate>(
         &self,
         e: &E,
         metric: &Box<MetricScorer>,
