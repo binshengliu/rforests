@@ -12,6 +12,7 @@ extern crate test;
 extern crate scoped_threadpool;
 #[macro_use]
 extern crate lazy_static;
+extern crate num_cpus;
 
 use clap::App;
 

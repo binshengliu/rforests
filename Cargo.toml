@@ -13,6 +13,7 @@ log = "0.3.8"
 clap = "2.26.2"
 lazy_static = "0.2.9"
 scoped_threadpool = "0.1.8"
+num_cpus = "1.7.0"
 
 [profile.release]
 debug = true
