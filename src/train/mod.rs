@@ -1,4 +1,5 @@
 pub mod dataset;
+pub mod validate_set;
 pub mod lambdamart;
 
 use clap::{App, Arg, ArgMatches, SubCommand};

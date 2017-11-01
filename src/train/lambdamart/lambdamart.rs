@@ -3,7 +3,7 @@ use train::dataset::*;
 use util::*;
 use metric::*;
 use super::training_set::*;
-use train::lambdamart::validate_set::*;
+use train::validate_set::*;
 
 /// A instance of LambdaMART algorithm.
 pub struct LambdaMART {
