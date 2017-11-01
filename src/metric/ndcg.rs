@@ -63,21 +63,21 @@ impl Measure for NDCGScorer {
     fn swap_changes(&self, labels: &[f64]) -> Vec<Vec<f64>> {
         let nlabels = labels.len();
 
-        let mut delta = vec![vec![0.0; nlabels]; nlabels];
+        let mut changes = vec![vec![0.0; nlabels]; nlabels];
 
         let ideal_dcg = self.max_dcg(labels);
 
         let size = usize::min(self.truncation_level, nlabels);
         for i in 0..size {
             for j in i + 1..nlabels {
-                delta[i][j] = (self.gain(labels[i]) - self.gain(labels[j])) *
+                changes[i][j] = (self.gain(labels[i]) - self.gain(labels[j])) *
                     (self.discount(i) - self.discount(j));
-                delta[i][j] /= ideal_dcg;
-                delta[j][i] = delta[i][j];
+                changes[i][j] /= ideal_dcg;
+                changes[j][i] = changes[i][j];
             }
         }
 
-        delta
+        changes
     }
 }
 
@@ -110,7 +110,7 @@ mod test {
     }
 
     #[test]
-    fn test_ndcg_delta() {
+    fn test_ndcg_swap_changes() {
         let ndcg = NDCGScorer::new(10);
 
         let max_dcg = 15.0 / 2.0_f64.log2() + 7.0 / 3.0_f64.log2() +

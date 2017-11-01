@@ -39,17 +39,17 @@ impl Measure for DCGScorer {
     fn swap_changes(&self, labels: &[f64]) -> Vec<Vec<f64>> {
         let nlabels = labels.len();
 
-        let mut delta = vec![vec![0.0; nlabels]; nlabels];
+        let mut changes = vec![vec![0.0; nlabels]; nlabels];
 
         for i in 0..nlabels {
             for j in i + 1..nlabels {
-                delta[i][j] = (self.gain(labels[i]) - self.gain(labels[j])) *
+                changes[i][j] = (self.gain(labels[i]) - self.gain(labels[j])) *
                     (self.discount(i) - self.discount(j));
-                delta[j][i] = delta[i][j];
+                changes[j][i] = changes[i][j];
             }
         }
 
-        delta
+        changes
     }
 }
 
@@ -76,7 +76,7 @@ mod test {
     }
 
     #[test]
-    fn test_dcg_delta() {
+    fn test_dcg_swap_changes() {
         let dcg = DCGScorer::new(10);
 
         // 16.392789260714373
