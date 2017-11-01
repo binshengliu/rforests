@@ -167,6 +167,50 @@ impl std::fmt::Debug for ThresholdMap {
     }
 }
 
+// Input: Vec of (index, label, score)
+// Output: Vec of (higher index, lower index, lambda, weight)
+fn compute_lambda_weight(
+    rank_list: &mut Vec<(usize, f64, f64)>,
+    metric: &Box<MetricScorer>,
+) -> Vec<(usize, usize, f64, f64)> {
+    let mut query_values: Vec<(usize, usize, f64, f64)> = Vec::new();
+    // Rank by the scores of our model.
+    rank_list.sort_by(|&(_, _, score1), &(_, _, score2)| {
+        score2.partial_cmp(&score1).unwrap_or(Ordering::Equal)
+    });
+
+    let ranked_labels: Vec<_> =
+        rank_list.iter().map(|&(_, label, _)| label).collect();
+
+    let metric_delta = metric.delta(&ranked_labels);
+
+    let k = metric.get_k();
+    for (metric_index1, &(index1, label1, score1)) in
+        rank_list.iter().enumerate()
+    {
+        for (metric_index2, &(index2, label2, score2)) in
+            rank_list.iter().enumerate()
+        {
+            if metric_index1 > k && metric_index2 > k {
+                break;
+            }
+
+            if label1 <= label2 {
+                continue;
+            }
+
+            let metric_delta_value = metric_delta[metric_index1][metric_index2]
+                .abs();
+            let rho = 1.0 / (1.0 + (score1 - score2).exp());
+            let lambda = metric_delta_value * rho;
+            let weight = rho * (1.0 - rho) * metric_delta_value;
+
+            query_values.push((index1, index2, lambda, weight));
+        }
+    }
+    query_values
+}
+
 /// A collection type containing a data set. The difference with
 /// DataSet is that this data structure keeps the latest label values
 /// after each training.
@@ -314,75 +358,37 @@ impl<'d> TrainingSet<'d> {
             *w = 0.0;
         }
 
-        // (index, lambda, weight)
-        let results: Arc<Mutex<Vec<Vec<_>>>> = Arc::new(Mutex::new(Vec::new()));
+        // (index, lambda, weight) grouped by queries
+        let values: Arc<Mutex<Vec<Vec<_>>>> = Arc::new(Mutex::new(Vec::new()));
         let mut pool = ::util::POOL.lock().unwrap();
-        pool.scoped(
-            |scoped| for (qid, mut query) in self.dataset.query_iter() {
-                let results = results.clone();
-                let training = &self;
-                scoped.execute(move || {
-                    debug!("Update lambdas for qid {}", qid);
+        pool.scoped(|scoped| for (_qid, query) in self.dataset.query_iter() {
+            let values = values.clone();
+            let training = &self;
+            scoped.execute(move || {
+                let mut rank_list: Vec<_> = query
+                    .iter()
+                    .map(|&index| {
+                        (
+                            index,
+                            training.dataset[index].label(),
+                            training.model_scores[index],
+                        )
+                    })
+                    .collect();
+                let query_values =
+                    compute_lambda_weight(&mut rank_list, metric);
+                let mut values = values.lock().unwrap();
+                values.push(query_values);
+            })
+        });
 
-                    let mut part: Vec<(usize, f64, f64)> = Vec::new();
-                    let mut rank_list: Vec<_> = query
-                        .iter()
-                        .map(|&index| {
-                            (
-                                index,
-                                training.dataset[index].label(),
-                                training.model_scores[index],
-                            )
-                        })
-                        .collect();
-
-                    // Rank by the scores of our model.
-                    rank_list.sort_by(|&(_, _, score1), &(_, _, score2)| {
-                        score2.partial_cmp(&score1).unwrap_or(Ordering::Equal)
-                    });
-
-                    let ranked_labels: Vec<_> =
-                        rank_list.iter().map(|&(_, label, _)| label).collect();
-
-                    let metric_delta = metric.delta(&ranked_labels);
-
-                    let k = metric.get_k();
-                    for (metric_index1, &(index1, label1, score1)) in
-                        rank_list.iter().enumerate()
-                    {
-                        for (metric_index2, &(index2, label2, score2)) in
-                            rank_list.iter().enumerate()
-                        {
-                            if metric_index1 > k && metric_index2 > k {
-                                break;
-                            }
-
-                            if label1 <= label2 {
-                                continue;
-                            }
-
-                            let metric_delta_value =
-                                metric_delta[metric_index1][metric_index2]
-                                    .abs();
-                            let rho = 1.0 / (1.0 + (score1 - score2).exp());
-                            let lambda = metric_delta_value * rho;
-                            let weight = rho * (1.0 - rho) * metric_delta_value;
-
-                            part.push((index1, lambda, weight));
-                            part.push((index2, -lambda, weight));
-                        }
-                    }
-                    let mut results = results.lock().unwrap();
-                    results.push(part);
-                })
-            },
-        );
-
-        let results = results.lock().unwrap();
-        for part in results.iter() {
-            for &(index, lambda, weight) in part.iter() {
-                self.lambdas[index] += lambda;
-                self.weights[index] += weight;
+        let values = values.lock().unwrap();
+        for query_values in values.iter() {
+            for &(index1, index2, lambda, weight) in query_values.iter() {
+                self.lambdas[index1] += lambda;
+                self.weights[index1] += weight;
+                self.lambdas[index2] -= lambda;
+                self.weights[index2] += weight;
             }
         }
     }
