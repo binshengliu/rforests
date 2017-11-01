@@ -1,6 +1,6 @@
 use train::dataset::DataSet;
 use train::Evaluate;
-use metric::MetricScorer;
+use metric::Measure;
 use util::Value;
 use std::cmp::Ordering;
 
@@ -21,7 +21,7 @@ impl<'a> From<&'a DataSet> for ValidateSet<'a> {
 }
 
 impl<'a> ValidateSet<'a> {
-    pub fn measure(&self, metric: &Box<MetricScorer>) -> f64 {
+    pub fn measure(&self, metric: &Box<Measure>) -> f64 {
         let mut score = 0.0;
         let mut count: usize = 0;
         for (_, query) in self.dataset.query_iter() {
@@ -37,7 +37,7 @@ impl<'a> ValidateSet<'a> {
 
             let labels: Vec<f64> =
                 model_scores.iter().map(|&(_, label)| label).collect();
-            let query_score = metric.score(&labels);
+            let query_score = metric.measure(&labels);
 
             count += 1;
             score += query_score;
