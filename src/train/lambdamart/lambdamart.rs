@@ -120,7 +120,7 @@ impl LambdaMART {
     }
 
     pub fn evaluate(&self, dataset: &DataSet) -> f64 {
-        dataset.validate(&self.ensemble, &self.config.metric)
+        dataset.evaluate(&self.ensemble, &self.config.metric)
     }
 
     fn print(&self, msg: &str) {
