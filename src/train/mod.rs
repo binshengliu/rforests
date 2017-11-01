@@ -2,6 +2,7 @@ pub mod dataset;
 pub mod lambdamart;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
+use train::dataset::Instance;
 
 pub fn main<'a>(matches: &ArgMatches<'a>) {
     match matches.subcommand_name() {
@@ -68,4 +69,9 @@ fn common_args<'a, 'b>() -> Vec<Arg<'a, 'b>> {
     ];
 
     common_args
+}
+
+/// Evaluate on an instance.
+pub trait Evaluate {
+    fn evaluate(&self, instance: &Instance) -> f64;
 }
