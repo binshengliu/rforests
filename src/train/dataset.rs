@@ -2,7 +2,7 @@ use format::svmlight::SvmLightFile;
 use util::{Id, Result, Value};
 use std;
 use std::cmp::Ordering::*;
-use train::lambdamart::regression_tree::Ensemble;
+use train::Evaluate;
 use metric::*;
 
 /// An instance of a label, a qid, and a group of feature values.
@@ -320,9 +320,9 @@ impl DataSet {
         })
     }
 
-    pub fn validate(
+    pub fn validate<E: Evaluate>(
         &self,
-        ensemble: &Ensemble,
+        e: &E,
         metric: &Box<MetricScorer>,
     ) -> f64 {
         let mut score = 0.0;
@@ -330,7 +330,7 @@ impl DataSet {
         for (qid, query) in self.query_iter() {
             let mut model_scores: Vec<(Id, Value)> = query
                 .iter()
-                .map(|&id| (id, ensemble.evaluate(&self.instances[id])))
+                .map(|&id| (id, e.evaluate(&self.instances[id])))
                 .collect();
             model_scores.sort_by(|&(_index1, score1), &(_index2, score2)| {
                 score2.partial_cmp(&score1).unwrap_or(Equal)

@@ -213,21 +213,6 @@ impl RegressionTree {
         leaf_output
     }
 
-    /// Evaluate an input.
-    pub fn evaluate(&self, instance: &Instance) -> f64 {
-        let mut node = &self.nodes[0];
-        while node.output.is_none() {
-            if instance.value(node.fid.unwrap()) <= node.threshold.unwrap() {
-                node = &self.nodes[node.left.unwrap()];
-            } else {
-                node = &self.nodes[node.right.unwrap()];
-            }
-        }
-
-        assert!(node.output.is_some());
-        node.output.unwrap() * self.learning_rate
-    }
-
     pub fn print(&self) {
         if self.nodes.is_empty() {
             println!("Empty tree");
@@ -255,6 +240,23 @@ impl RegressionTree {
     }
 }
 
+impl ::train::Evaluate for RegressionTree {
+    /// Evaluate an input.
+    fn evaluate(&self, instance: &Instance) -> f64 {
+        let mut node = &self.nodes[0];
+        while node.output.is_none() {
+            if instance.value(node.fid.unwrap()) <= node.threshold.unwrap() {
+                node = &self.nodes[node.left.unwrap()];
+            } else {
+                node = &self.nodes[node.right.unwrap()];
+            }
+        }
+
+        assert!(node.output.is_some());
+        node.output.unwrap() * self.learning_rate
+    }
+}
+
 pub struct Ensemble {
     trees: Vec<RegressionTree>,
 }
@@ -263,8 +265,10 @@ impl Ensemble {
     pub fn new() -> Ensemble {
         Ensemble { trees: Vec::new() }
     }
+}
 
-    pub fn evaluate(&self, instance: &Instance) -> f64 {
+impl ::train::Evaluate for Ensemble {
+    fn evaluate(&self, instance: &Instance) -> f64 {
         let mut result = 0.0;
         for tree in &self.trees {
             result += tree.evaluate(instance);
