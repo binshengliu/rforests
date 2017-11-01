@@ -7,6 +7,7 @@ use metric;
 use train::dataset::*;
 
 pub mod training_set;
+pub mod validate_set;
 pub mod lambdamart;
 pub mod regression_tree;
 pub mod histogram;

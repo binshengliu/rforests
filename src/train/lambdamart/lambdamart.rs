@@ -3,6 +3,7 @@ use train::dataset::*;
 use util::*;
 use metric::*;
 use super::training_set::*;
+use train::lambdamart::validate_set::*;
 
 /// A instance of LambdaMART algorithm.
 pub struct LambdaMART {
@@ -81,6 +82,9 @@ impl LambdaMART {
     pub fn learn(&mut self) -> Result<()> {
         let mut training =
             TrainingSet::new(&self.config.train, self.config.thresholds);
+        let mut validate =
+            self.config.validate.as_ref().map(|v| ValidateSet::from(v));
+
         self.print_metric_header();
         for i in 0..self.config.trees {
             training.update_lambdas_weights(&self.config.metric);
@@ -95,11 +99,22 @@ impl LambdaMART {
             // does not split and becomes a leaf.
             let leaf_output = tree.fit(&training);
 
+            // Update the scores fitted by the regression tree.
             training.update_result(&leaf_output);
+
+            // Evaluate on the training data set.
+            let train_score = training.evaluate(&self.config.metric);
+
+            // Update scores on validate set.
+            validate.as_mut().map(|v| v.update(&tree));
+
+            // Evaluate on validate set.
+            let validate_score =
+                validate.as_ref().map(|v| v.evaluate(&self.config.metric));
 
             self.ensemble.push(tree);
 
-            self.print_metric(i, &training);
+            self.print_metric(i, train_score, validate_score);
         }
         Ok(())
     }
@@ -125,16 +140,18 @@ impl LambdaMART {
     }
 
     /// Print metric of each iteration.
-    fn print_metric(&self, iteration: usize, training: &TrainingSet) {
-        let train_score = training.evaluate(&self.config.metric);
-        if let Some(ref validate) = self.config.validate {
-            let validation_score =
-                validate.validate(&self.ensemble, &self.config.metric);
+    fn print_metric(
+        &self,
+        iteration: usize,
+        train_score: f64,
+        validate_score: Option<f64>,
+    ) {
+        if let Some(v_score) = validate_score {
             let s = format!(
                 "{:<7} | {:>9.4} | {:>9.4}",
                 iteration,
                 train_score,
-                validation_score
+                v_score
             );
             self.print(&s);
         } else {
