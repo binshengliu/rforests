@@ -21,7 +21,7 @@ impl<'a> From<&'a DataSet> for ValidateSet<'a> {
 }
 
 impl<'a> ValidateSet<'a> {
-    pub fn evaluate(&self, metric: &Box<MetricScorer>) -> f64 {
+    pub fn measure(&self, metric: &Box<MetricScorer>) -> f64 {
         let mut score = 0.0;
         let mut count: usize = 0;
         for (_, query) in self.dataset.query_iter() {

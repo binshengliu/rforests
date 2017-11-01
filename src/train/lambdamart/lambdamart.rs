@@ -102,15 +102,15 @@ impl LambdaMART {
             // Update the scores fitted by the regression tree.
             training.update_result(&leaf_output);
 
-            // Evaluate on the training data set.
-            let train_score = training.evaluate(&self.config.metric);
+            // Measure on the training data set.
+            let train_score = training.measure(&self.config.metric);
 
             // Update scores on validate set.
             validate.as_mut().map(|v| v.update(&tree));
 
-            // Evaluate on validate set.
+            // Measure on validate set.
             let validate_score =
-                validate.as_ref().map(|v| v.evaluate(&self.config.metric));
+                validate.as_ref().map(|v| v.measure(&self.config.metric));
 
             self.ensemble.push(tree);
 

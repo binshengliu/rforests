@@ -393,7 +393,7 @@ impl<'d> TrainingSet<'d> {
         }
     }
 
-    pub fn evaluate(&self, metric: &Box<MetricScorer>) -> f64 {
+    pub fn measure(&self, metric: &Box<MetricScorer>) -> f64 {
         let mut score = 0.0;
         let mut count = 0;
         for (_qid, mut indices) in self.dataset.query_iter() {
