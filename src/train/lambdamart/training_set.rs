@@ -320,20 +320,21 @@ impl<'d> TrainingSet<'d> {
         pool.scoped(
             |scoped| for (qid, mut query) in self.dataset.query_iter() {
                 let results = results.clone();
-                let mut part: Vec<(usize, f64, f64)> = Vec::new();
-                let mut rank_list: Vec<_> = query
-                    .iter()
-                    .map(|&index| {
-                        (
-                            index,
-                            self.dataset[index].label(),
-                            self.model_scores[index],
-                        )
-                    })
-                    .collect();
-
+                let training = &self;
                 scoped.execute(move || {
                     debug!("Update lambdas for qid {}", qid);
+
+                    let mut part: Vec<(usize, f64, f64)> = Vec::new();
+                    let mut rank_list: Vec<_> = query
+                        .iter()
+                        .map(|&index| {
+                            (
+                                index,
+                                training.dataset[index].label(),
+                                training.model_scores[index],
+                            )
+                        })
+                        .collect();
 
                     // Rank by the scores of our model.
                     rank_list.sort_by(|&(_, _, score1), &(_, _, score2)| {
