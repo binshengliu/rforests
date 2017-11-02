@@ -77,16 +77,16 @@ pub struct RegressionTree {
     nodes: Vec<Node>,
 }
 
-struct NodeData<'t, 'd: 't> {
+struct NodeData<'a> {
     index: usize,
-    sample: TrainingSample<'t, 'd>,
+    sample: TrainingSample<'a>,
 }
 
-impl<'t, 'd: 't> NodeData<'t, 'd> {
+impl<'a> NodeData<'a> {
     pub fn new(
         index: usize,
-        sample: TrainingSample<'t, 'd>,
-    ) -> NodeData<'t, 'd> {
+        sample: TrainingSample<'a>,
+    ) -> NodeData<'a> {
         NodeData {
             index: index,
             sample: sample,
@@ -94,21 +94,21 @@ impl<'t, 'd: 't> NodeData<'t, 'd> {
     }
 }
 
-impl<'t, 'd: 't> PartialEq for NodeData<'t, 'd> {
+impl<'a> PartialEq for NodeData<'a> {
     fn eq(&self, other: &NodeData) -> bool {
         self.sample.variance() == other.sample.variance()
     }
 }
 
-impl<'t, 'd: 't> PartialOrd for NodeData<'t, 'd> {
+impl<'a> PartialOrd for NodeData<'a> {
     fn partial_cmp(&self, other: &NodeData) -> Option<Ordering> {
         self.sample.variance().partial_cmp(&other.sample.variance())
     }
 }
 
-impl<'t, 'd: 't> Eq for NodeData<'t, 'd> {}
+impl<'a> Eq for NodeData<'a> {}
 
-impl<'t, 'd: 't> Ord for NodeData<'t, 'd> {
+impl<'a> Ord for NodeData<'a> {
     fn cmp(&self, other: &NodeData) -> Ordering {
         self.partial_cmp(other).unwrap_or(Ordering::Equal)
     }

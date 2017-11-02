@@ -442,24 +442,24 @@ impl Ord for SplitPos {
     }
 }
 
-pub struct SampleSplit<'t, 'd: 't> {
+pub struct SampleSplit<'a> {
     pub fid: usize,
     pub threshold: f64,
     pub s: f64,
-    pub left: TrainingSample<'t, 'd>,
-    pub right: TrainingSample<'t, 'd>,
+    pub left: TrainingSample<'a>,
+    pub right: TrainingSample<'a>,
 }
 
 /// A collection type containing part of a data set.
-pub struct TrainingSample<'t, 'd: 't> {
+pub struct TrainingSample<'a> {
     /// Original data
-    training: &'t TrainSet<'d>,
+    training: &'a TrainSet<'a>,
 
     /// Indices into training
     indices: Vec<usize>,
 }
 
-impl<'t, 'd: 't> TrainingSample<'t, 'd> {
+impl<'a> TrainingSample<'a> {
     /// Returns the number of instances in the data set sample, also
     /// referred to as its 'length'.
     pub fn len(&self) -> usize {
@@ -472,7 +472,7 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
     /// The iterator returned yields pairs (index, value, instance),
     /// where `index` is the index of Instance, `value` is the label
     /// value, and `instance` is the reference to the Instance.
-    pub fn iter<'a>(
+    pub fn iter(
         &'a self,
     ) -> impl Iterator<Item = (Id, Value, &Instance)> + 'a {
         self.indices.iter().map(move |&index| {
@@ -483,18 +483,18 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
 
     /// Returns an iterator over the feature ids in the data set
     /// sample.
-    pub fn fid_iter<'a>(&'a self) -> impl Iterator<Item = Id> + 'a {
+    pub fn fid_iter(&'a self) -> impl Iterator<Item = Id> + 'a {
         self.training.fid_iter()
     }
 
     /// Returns an iterator over the labels in the data set sample.
-    pub fn label_iter<'a>(&'a self) -> impl Iterator<Item = Value> + 'a {
+    pub fn label_iter(&'a self) -> impl Iterator<Item = Value> + 'a {
         self.iter().map(|(_index, label, _ins)| label)
     }
 
     /// Returns an iterator over the values of the given feature in
     /// the data set sample.
-    pub fn value_iter<'a>(
+    pub fn value_iter(
         &'a self,
         fid: Id,
     ) -> impl Iterator<Item = Value> + 'a {
@@ -583,7 +583,7 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
     /// Split self. Returns (split feature, threshold, s value, left
     /// child, right child). For each split, if its variance is zero,
     /// it's non-splitable.
-    pub fn split(&self, min_leaf_count: usize) -> Option<SampleSplit<'t, 'd>> {
+    pub fn split(&self, min_leaf_count: usize) -> Option<SampleSplit<'a>> {
         assert!(min_leaf_count > 0);
         if self.indices.len() < min_leaf_count ||
             self.variance().abs() <= 0.000001
@@ -626,8 +626,8 @@ impl<'t, 'd: 't> TrainingSample<'t, 'd> {
     }
 }
 
-impl<'t, 'd> From<&'t TrainSet<'d>> for TrainingSample<'t, 'd> {
-    fn from(training: &'t TrainSet<'d>) -> TrainingSample<'t, 'd> {
+impl<'a> From<&'a TrainSet<'a>> for TrainingSample<'a> {
+    fn from(training: &'a TrainSet<'a>) -> TrainingSample<'a> {
         let len = training.len();
         let indices: Vec<usize> = (0..len).collect();
         TrainingSample {
@@ -637,7 +637,7 @@ impl<'t, 'd> From<&'t TrainSet<'d>> for TrainingSample<'t, 'd> {
     }
 }
 
-impl<'t, 'd> std::fmt::Display for TrainingSample<'t, 'd> {
+impl<'a> std::fmt::Display for TrainingSample<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for &index in self.indices.iter() {
             let (label, instance) = self.training.get(index);
