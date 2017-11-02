@@ -63,8 +63,9 @@ impl BestScore {
         }
     }
 
+    /// Return the best iteration of the validate score.
     pub fn best_iter(&self) -> Option<usize> {
-        self.iter
+        self.validate.and(self.iter)
     }
 }
 
@@ -184,6 +185,7 @@ impl LambdaMART {
                 .map(|iter| iter + self.config.early_stop < i)
                 .unwrap_or(false);
             if stop {
+                self.ensemble.truncate(best_score.best_iter().unwrap());
                 break;
             }
         }
