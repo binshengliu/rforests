@@ -14,11 +14,7 @@ struct HistogramBin {
 }
 
 impl HistogramBin {
-    pub fn new(
-        threshold: f64,
-        acc_count: usize,
-        acc_sum: f64,
-    ) -> HistogramBin {
+    pub fn new(threshold: f64, acc_count: usize, acc_sum: f64) -> HistogramBin {
         HistogramBin {
             threshold: threshold,
             acc_count: acc_count,
@@ -94,14 +90,14 @@ impl Histogram {
             let s_value = sum_left * sum_left / count_left as f64 +
                 sum_right * sum_right / count_right as f64;
 
-            match split {
-                Some((_old_threshold, old_s)) => {
-                    if s_value > old_s {
-                        split = Some((bin.threshold, s_value));
-                    }
-                }
-                None => split = Some((bin.threshold, s_value)),
-            }
+            split = split.map_or(
+                Some((bin.threshold, s_value)),
+                |(old_threshold, old_s)| if s_value > old_s {
+                    Some((bin.threshold, s_value))
+                } else {
+                    Some((old_threshold, old_s))
+                },
+            );
         }
 
         split
@@ -116,11 +112,7 @@ impl FromIterator<(Value, usize, Value)> for Histogram {
     {
         let bins: Vec<HistogramBin> = iter.into_iter()
             .map(|(threshold, acc_count, acc_sum)| {
-                HistogramBin::new(
-                    threshold,
-                    acc_count,
-                    acc_sum,
-                )
+                HistogramBin::new(threshold, acc_count, acc_sum)
             })
             .collect();
 
