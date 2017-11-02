@@ -84,6 +84,7 @@ impl LambdaMART {
             TrainSet::new(&self.config.train, self.config.thresholds);
         let mut validate =
             self.config.validate.as_ref().map(|v| ValidateSet::from(v));
+        let mut best_iter: Option<(usize, f64, f64)> = None;
 
         self.print_metric_header();
         for i in 0..self.config.trees {
@@ -115,6 +116,35 @@ impl LambdaMART {
             self.ensemble.push(tree);
 
             self.print_metric(i, train_score, validate_score);
+
+            // Check if the best validation score is `early_stop`
+            // round earlier.
+            best_iter = best_iter.or(validate_score.map(
+                |score| (i, train_score, score),
+            ));
+
+            best_iter =
+                best_iter.and_then(|(best_iter, best_train, best_validate)| {
+                    validate_score.map(
+                        |new_score| if new_score > best_validate {
+                            (i, train_score, new_score)
+                        } else {
+                            (best_iter, best_train, best_validate)
+                        },
+                    )
+                });
+
+            let stop = best_iter
+                .map(|(iter, _, _)| iter + self.config.early_stop < i)
+                .unwrap_or(false);
+            if stop {
+                let (best_i, best_train, best_validate) = best_iter.unwrap();
+                let name = self.config.metric.name();
+                println!("\nBest validation score at #iter {}:", best_i);
+                println!("{} on training data: {}", name, best_train);
+                println!("{} on validating data: {}", name, best_validate);
+                break;
+            }
         }
         Ok(())
     }
