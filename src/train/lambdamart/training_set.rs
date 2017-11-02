@@ -560,7 +560,7 @@ impl<'a> TrainSample<'a> {
     /// Find the best split of this sample. For each feature, find the
     /// best split point that gets the best squared error. And find
     /// the best among all the features.
-    fn best_split(&self, min_leaf_count: usize) -> Option<SplitPos> {
+    fn best_split(&self, min_leaf_samples: usize) -> Option<SplitPos> {
         // (fid, threshold, s)
         let splits: Arc<Mutex<BinaryHeap<SplitPos>>> =
             Arc::new(Mutex::new(BinaryHeap::new()));
@@ -569,7 +569,7 @@ impl<'a> TrainSample<'a> {
             let splits = splits.clone();
             scoped.execute(move || {
                 let feature_histogram = self.feature_histogram(fid);
-                let split = feature_histogram.best_split(min_leaf_count);
+                let split = feature_histogram.best_split(min_leaf_samples);
                 if let Some((threshold, s)) = split {
                     splits.lock().unwrap().push(SplitPos { fid, threshold, s })
                 }
@@ -583,9 +583,9 @@ impl<'a> TrainSample<'a> {
     /// Split self. Returns (split feature, threshold, s value, left
     /// child, right child). For each split, if its variance is zero,
     /// it's non-splitable.
-    pub fn split(&self, min_leaf_count: usize) -> Option<SampleSplit<'a>> {
-        assert!(min_leaf_count > 0);
-        if self.indices.len() < min_leaf_count ||
+    pub fn split(&self, min_leaf_samples: usize) -> Option<SampleSplit<'a>> {
+        assert!(min_leaf_samples > 0);
+        if self.indices.len() < min_leaf_samples ||
             self.variance().abs() <= 0.000001
         {
             return None;
@@ -593,7 +593,7 @@ impl<'a> TrainSample<'a> {
 
         // Find the split with the best s value;
         if let Some(SplitPos { fid, threshold, s }) =
-            self.best_split(min_leaf_count)
+            self.best_split(min_leaf_samples)
         {
             let mut left_indices = Vec::new();
             let mut right_indices = Vec::new();
