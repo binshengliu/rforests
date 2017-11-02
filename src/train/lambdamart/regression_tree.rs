@@ -79,13 +79,13 @@ pub struct RegressionTree {
 
 struct NodeData<'a> {
     index: usize,
-    sample: TrainingSample<'a>,
+    sample: TrainSample<'a>,
 }
 
 impl<'a> NodeData<'a> {
     pub fn new(
         index: usize,
-        sample: TrainingSample<'a>,
+        sample: TrainSample<'a>,
     ) -> NodeData<'a> {
         NodeData {
             index: index,
@@ -157,7 +157,7 @@ impl RegressionTree {
 
     /// Fit to a training.
     pub fn fit(&mut self, training: &TrainSet) -> Vec<Value> {
-        let sample = TrainingSample::from(training);
+        let sample = TrainSample::from(training);
         let mut leaves = 0;
         let mut leaf_output: Vec<Value> = vec![0.0; training.len()];
 

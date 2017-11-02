@@ -446,12 +446,12 @@ pub struct SampleSplit<'a> {
     pub fid: usize,
     pub threshold: f64,
     pub s: f64,
-    pub left: TrainingSample<'a>,
-    pub right: TrainingSample<'a>,
+    pub left: TrainSample<'a>,
+    pub right: TrainSample<'a>,
 }
 
 /// A collection type containing part of a data set.
-pub struct TrainingSample<'a> {
+pub struct TrainSample<'a> {
     /// Original data
     training: &'a TrainSet<'a>,
 
@@ -459,7 +459,7 @@ pub struct TrainingSample<'a> {
     indices: Vec<usize>,
 }
 
-impl<'a> TrainingSample<'a> {
+impl<'a> TrainSample<'a> {
     /// Returns the number of instances in the data set sample, also
     /// referred to as its 'length'.
     pub fn len(&self) -> usize {
@@ -605,11 +605,11 @@ impl<'a> TrainingSample<'a> {
                 }
             }
 
-            let left = TrainingSample {
+            let left = TrainSample {
                 training: self.training,
                 indices: left_indices,
             };
-            let right = TrainingSample {
+            let right = TrainSample {
                 training: self.training,
                 indices: right_indices,
             };
@@ -626,18 +626,18 @@ impl<'a> TrainingSample<'a> {
     }
 }
 
-impl<'a> From<&'a TrainSet<'a>> for TrainingSample<'a> {
-    fn from(training: &'a TrainSet<'a>) -> TrainingSample<'a> {
+impl<'a> From<&'a TrainSet<'a>> for TrainSample<'a> {
+    fn from(training: &'a TrainSet<'a>) -> TrainSample<'a> {
         let len = training.len();
         let indices: Vec<usize> = (0..len).collect();
-        TrainingSample {
+        TrainSample {
             training: training,
             indices: indices,
         }
     }
 }
 
-impl<'a> std::fmt::Display for TrainingSample<'a> {
+impl<'a> std::fmt::Display for TrainSample<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for &index in self.indices.iter() {
             let (label, instance) = self.training.get(index);
@@ -782,7 +782,7 @@ mod tests {
         let mut training = TrainSet::new(&dataset, 3);
         training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
-        let sample = TrainingSample::from(&training);
+        let sample = TrainSample::from(&training);
         let split = sample.split(1).unwrap();
         assert_eq!(split.fid, 1);
         assert_eq!(split.threshold, 1.0);
@@ -812,7 +812,7 @@ mod tests {
         let mut training = TrainSet::new(&dataset, 3);
         training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
-        let sample = TrainingSample::from(&training);
+        let sample = TrainSample::from(&training);
         assert!(sample.split(9).is_none());
         assert!(sample.split(4).is_none());
         let split = sample.split(3).unwrap();
@@ -831,7 +831,7 @@ mod tests {
         let mut training = TrainSet::new(&dataset, 256);
         training.update_lambdas_weights(&metric::new("NDCG", 10).unwrap());
 
-        let sample = TrainingSample::from(&training);
+        let sample = TrainSample::from(&training);
         b.iter(|| sample.split(1).unwrap());
     }
 }
