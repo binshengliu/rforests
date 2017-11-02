@@ -221,23 +221,16 @@ impl LambdaMART {
         train_score: f64,
         validate_score: Option<f64>,
     ) {
-        if let Some(v_score) = validate_score {
-            let s = format!(
-                "{:<7} | {:>9.4} | {:>9.4}",
-                iteration,
-                train_score,
-                v_score
-            );
-            self.print(&s);
-        } else {
-            let s = format!(
-                "{:<7} | {:>9.4} | {:>9.4}",
-                iteration,
-                train_score,
-                ""
-            );
-            self.print(&s);
-        }
+        let s = format!(
+            "{:<7} | {:>9.4} | {}",
+            iteration,
+            train_score,
+            validate_score
+                .map(|score| format!("{:>9.4}", score))
+                .unwrap_or("".to_string())
+        );
+        self.print(&s);
+
     }
 }
 
