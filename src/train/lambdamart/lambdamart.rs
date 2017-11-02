@@ -27,6 +27,64 @@ pub struct Config {
     pub print_metric: bool,
 }
 
+struct BestScore {
+    name: String,
+    iter: Option<usize>,
+    train: Option<f64>,
+    validate: Option<f64>,
+}
+
+impl BestScore {
+    pub fn new(name: &str) -> BestScore {
+        BestScore {
+            name: name.to_string(),
+            iter: None,
+            train: None,
+            validate: None,
+        }
+    }
+
+    pub fn update(&mut self, iter: usize, train: f64, validate: Option<f64>) {
+        self.iter = self.iter.or(Some(iter));
+        self.train = self.train.or(Some(train));
+        self.validate = self.validate.or(validate);
+
+        if let Some(validate) = validate {
+            if validate > self.validate.unwrap() {
+                self.iter = Some(iter);
+                self.train = Some(train);
+                self.validate = Some(validate);
+            }
+        } else {
+            if train > self.train.unwrap() {
+                self.iter = Some(iter);
+                self.train = Some(train);
+            }
+        }
+    }
+
+    pub fn best_iter(&self) -> Option<usize> {
+        self.iter
+    }
+}
+
+impl ::std::fmt::Display for BestScore {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        match (self.iter, self.train) {
+            (Some(iter), Some(train)) => {
+                writeln!(f, "\nBest score at #iter {}:", iter)?;
+                writeln!(f, "{} on training data: {:.4}", self.name, train)?;
+            }
+            _ => (),
+        }
+        if let Some(validate) = self.validate {
+            writeln!(f, "{} on validating data: {:.4}", self.name, validate)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl LambdaMART {
     /// Create a new LambdaMART instance.
     ///
@@ -84,7 +142,7 @@ impl LambdaMART {
             TrainSet::new(&self.config.train, self.config.thresholds);
         let mut validate =
             self.config.validate.as_ref().map(|v| ValidateSet::from(v));
-        let mut best_iter: Option<(usize, f64, f64)> = None;
+        let mut best_score = BestScore::new(&self.config.metric.name());
 
         self.print_metric_header();
         for i in 0..self.config.trees {
@@ -119,33 +177,18 @@ impl LambdaMART {
 
             // Check if the best validation score is `early_stop`
             // round earlier.
-            best_iter = best_iter.or(validate_score.map(
-                |score| (i, train_score, score),
-            ));
+            best_score.update(i, train_score, validate_score);
 
-            best_iter =
-                best_iter.and_then(|(best_iter, best_train, best_validate)| {
-                    validate_score.map(
-                        |new_score| if new_score > best_validate {
-                            (i, train_score, new_score)
-                        } else {
-                            (best_iter, best_train, best_validate)
-                        },
-                    )
-                });
-
-            let stop = best_iter
-                .map(|(iter, _, _)| iter + self.config.early_stop < i)
+            let stop = best_score
+                .best_iter()
+                .map(|iter| iter + self.config.early_stop < i)
                 .unwrap_or(false);
             if stop {
-                let (best_i, best_train, best_validate) = best_iter.unwrap();
-                let name = self.config.metric.name();
-                println!("\nBest validation score at #iter {}:", best_i);
-                println!("{} on training data: {}", name, best_train);
-                println!("{} on validating data: {}", name, best_validate);
                 break;
             }
         }
+
+        println!("{}", best_score);
         Ok(())
     }
 
